@@ -65,6 +65,7 @@ from runner.utils.decorators import (
     vertex_prompt_cache_ttl_ctx,
     world_id_ctx,
 )
+from runner.utils.env_file import load_env_file, require_provider_keys
 from runner.utils.judge_relay import JudgeRelay, set_current_verifier, set_relay
 from runner.utils.llm import (
     prefix_cache_enabled,
@@ -841,6 +842,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    load_env_file()
 
     # Opened, not read. A world snapshot can be gigabytes and zipfile only needs
     # a seekable file.
@@ -874,6 +876,7 @@ if __name__ == "__main__":
         raw_settings = json.load(f)
     adopt_inline_cas_settings(raw_settings)
     grading_settings = GradingSettings.model_validate_json(json.dumps(raw_settings))
+    require_provider_keys(grading_settings.llm_judge_model)
 
     grading_logs: GradingLogsCollector | None = None
     if grading_settings.grading_logs_in_output:

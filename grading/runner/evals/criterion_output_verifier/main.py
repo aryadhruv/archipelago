@@ -69,6 +69,7 @@ from runner.utils.file_transformations.spreadsheet_to_images.main import (
     spreadsheet_to_images,
 )
 from runner.utils.llm import build_messages, call_llm
+from runner.utils.task_prompt import task_prompt as read_task_prompt
 from runner.utils.token_utils import count_tokens, get_model_context_limit
 
 LLM_JUDGE_TIMEOUT = 3600
@@ -335,15 +336,8 @@ def _estimate_artifact_tokens(artifact: Any, model: str) -> int:
 
 def _extract_task_prompt(input: EvalImplInput) -> str | None:
     """Extract the task prompt from trajectory messages."""
-    if not input.trajectory or not input.trajectory.messages:
-        return None
-
-    for msg in input.trajectory.messages:
-        if msg.get("role") == "user" and msg.get("content"):
-            content = msg.get("content")
-            return str(content) if content else None
-
-    return None
+    text, _ = read_task_prompt(input.trajectory)
+    return text or None
 
 
 def _filter_artifacts_programmatically(

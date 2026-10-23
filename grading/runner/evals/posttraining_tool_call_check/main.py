@@ -10,6 +10,7 @@ from runner.evals.models import EvalImplInput
 from runner.evals.snapshot_utils import load_snapshot_tool_aliases
 from runner.models import VerifierResult, VerifierResultStatus
 from runner.utils.llm import build_messages, call_llm
+from runner.utils.task_prompt import task_prompt as read_task_prompt
 from runner.utils.trajectory import (
     apply_tool_remap,
     extract_tool_calls_with_outputs,
@@ -154,12 +155,7 @@ async def posttraining_tool_call_check_eval(input: EvalImplInput) -> VerifierRes
         logger.info("Using custom prompt template")
 
     # Extract task prompt (first user message)
-    task_prompt = ""
-    for message in input.trajectory.messages:
-        if message.get("role") == "user":
-            content = message.get("content")
-            task_prompt = str(content) if content else ""
-            break
+    task_prompt, _ = read_task_prompt(input.trajectory)
 
     if not task_prompt:
         logger.warning("No task prompt found in trajectory")

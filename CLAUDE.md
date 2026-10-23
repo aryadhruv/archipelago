@@ -11,12 +11,13 @@ Upstream is `Mercor-Intelligence/archipelago`. Its commits are automated syncs (
 - `grading/`: the grading runner, also `uv run python -m runner.main`. It has 67 verifier types (the CAD ones were removed in this fork), an LLM judge, and scoring methods (`template` is a plain average, and weighted scoring is available).
 - `mcp_servers/`: 9 servers that work on local files only: filesystem, spreadsheets, documents, pdfs, mail (mbox), calendar (.ics), chat, code, presentations. Each server has its own `.venv`. This fork removed the external market-data servers (`fmp`, `edgar_sec`).
 - `examples/`: thin wrappers. `simple_task/main.py` runs populate → `/apps` → agent → snapshot → grading.
+- `docs/fork-changes.md`: what this fork changed relative to upstream (removed servers and verifiers, added settings, fixes). Update it with every change in behavior.
 - `docs/upstream-internals.md`: what upstream filtered out before publishing (agentic verifier, private packages, app servers), the Mercor services that stay dormant locally (Datadog, Redis, S3, LLM gateway, webhooks…), and what this fork removed. Check it before reviving any of them.
 
 ## Running locally
 
 ```bash
-set -a && source agents/.env && set +a     # runner does NOT load .env itself; key = OPENROUTER_API_KEY
+# agents/.env and grading/.env each need OPENROUTER_API_KEY; each runner loads its own
 cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 ```
 
@@ -29,16 +30,20 @@ cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 ### Local patches (uncommitted, from the test run)
 
 - `examples/simple_task/{orchestrator_config,grading_settings,mcp_config}.json` were switched to OpenRouter and the venv/stdio settings above.
-- `examples/simple_task/patches/read_image_file.py` is bind-mounted by `environment/docker-compose.override.yml`. It sniffs the image format from magic bytes because the snapshot's JPEGs are named `.png` and Anthropic rejects them. This should become a real fix in `mcp_servers/filesystem` (see below).
+- The old clone bind-mounted a patched `read_image_file.py` through `environment/docker-compose.override.yml`. That is now fixed in the server (backlog item 1), so don't carry the override over.
 
 ## Fix-up backlog
 
 ### Must fix
-1. **Image MIME detection.** Move the magic-byte sniffing into `mcp_servers/filesystem/.../tools/read_image_file.py`, and check the pdfs and documents image tools for the same bug. Then delete the override and the patch.
-2. **Errors vs. fails.** If any verifier errors, for example because the judge's API call fails, the whole run gets `final_score: null` and `grading_run_status: error`. The leaderboard must count these as harness failures and rerun them, not score them.
-3. **Judge prompt is garbled.** The judge's "original task" section contained `ValidatorIterator(…)` instead of the prompt text, and image messages aren't converted to text. Fix this in the grading prompt builder.
-4. **Context window fallback.** When LiteLLM doesn't know a model's context size, the runner assumes 128,000 tokens, which shifts when ReSum summarisation starts. Require `context_window_tokens` per model.
-5. **Env loading.** Make the agent and grading runners load their `.env`, or fail early when keys are missing. A missing key currently surfaces later as an OpenRouter 401 in the judge.
+1. ~~**Image MIME detection.**~~ Done: `read_image_file` sniffs PNG/JPEG/GIF/WebP magic bytes and falls back to the extension. The documents, pdfs and presentations image tools re-encode to JPEG, so they were never affected.
+2. ~~**Errors vs. fails.**~~ Grading already does the right thing, and the outer agent timeout now records a `wall_clock` fault. The grid runner and leaderboard (items 7–8) must apply this rule:
+   - Grading: a verifier that raises or returns `status: error` (judge API failure, auth error) makes the whole run `grading_run_status: error` with `final_score: null`. Every scoring method refuses to score around errored criteria, and judge calls retry transient errors 5 times first. Rerun grading; never record a score.
+   - Agent `status: failed` is the model's fault (steps or output budget exhausted, context overflow, bad request). Grade it and count it as scored.
+   - Agent `status: error` is infra (rate limit, 5xx, connection, MCP timeout). Rerun it, unless `fault` is `{"kind": "budget_exhausted", "budget": "wall_clock"}`: that is a timeout, which the fairness rules count as a fail (score 0).
+   - Agent `status: cancelled` means the run was torn down externally. Rerun it.
+3. ~~**Judge prompt is garbled.**~~ Done. Pydantic validates list-of-blocks message content into a read-once `ValidatorIterator`, and the judge's task-prompt extractors called `str()` on it. `output_llm` now resolves the content first and renders images as `[image_url omitted]`. `criterion_output_verifier`, `deep_research`, `posttraining_tool_call_check` and `response_tool_verifier` now use `runner.utils.task_prompt`. Any new code that reads `trajectory.messages[*]["content"]` must call `resolve_lazy_content(msg)` first.
+4. ~~**Context window fallback.**~~ Done. Every `openrouter/...` model string misses the window table (OpenRouter isn't a known lane, on purpose, since a router can serve a smaller window), so the runner silently assumed 128,000 tokens and moved the point where ReSum summarisation starts. Setting `CONTEXT_WINDOW_FALLBACK_ENABLED=false` makes the agent runner raise instead. The grid runner must set it, pass `context_window_tokens` for every model, and check this before launching: an agent that raises ends as `status: error`, which item 2's rule would retry forever.
+5. ~~**Env loading.**~~ Done. Each runner's CLI loads its own `<runner>/.env` (variables already set win). It then exits before any work if the orchestrator or judge model's provider key is missing (`litellm.validate_environment`; skipped when `LLM_GATEWAY_API_BASE` is set). The old 401 came from litellm's import-time `load_dotenv()`, which only looks in the cwd: the example runs grading from `grading/`, which had no `.env`.
 
 ### Build
 6. **Parallel runs.** The compose file fixes the container name `archipelago-environment` and port `8080`, so concurrent runs collide. Make the compose project name and port configurable per worker. The scripts already read `ENV_URL`.

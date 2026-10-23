@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     # Agent execution hard timeout
     AGENT_TIMEOUT_SECONDS: int = 22 * 60 * 60 + 30 * 60  # 22 hours 30 minutes
 
+    # When False, a model whose context window cannot be resolved (no
+    # context_window_tokens in agent config, not in the table, unknown to
+    # litellm) raises instead of assuming a fallback size. Comparisons across
+    # models set this so compaction timing is never decided by a lookup miss.
+    CONTEXT_WINDOW_FALLBACK_ENABLED: bool = True
+
     # Reconnect the MCP gateway session after a transport failure during a tool call.
     MCP_TOOL_RECONNECT_ENABLED: bool = True
 

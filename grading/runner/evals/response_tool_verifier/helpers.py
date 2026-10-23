@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 
 from runner.evals.models import EvalImplInput
+from runner.utils.task_prompt import task_prompt as read_task_prompt
 
 
 def decode_base64_content(content: str) -> str:
@@ -123,12 +124,8 @@ def extract_task_prompt(input: EvalImplInput) -> str:
     if not input.trajectory or not input.trajectory.messages:
         return "(No task prompt found)"
 
-    for msg in input.trajectory.messages:
-        if msg.get("role") == "user" and msg.get("content"):
-            content = msg.get("content")
-            return str(content) if content else "(Empty user message)"
-
-    return "(No user message found)"
+    text, _ = read_task_prompt(input.trajectory)
+    return text or "(No user message found)"
 
 
 def extract_agent_response(input: EvalImplInput) -> str:

@@ -29,9 +29,12 @@ from runner.utils.decorators import (
     orchestrator_id_ctx,
     orchestrator_version_ctx,
 )
+from runner.utils.env_file import load_env_file, require_provider_keys
 from runner.utils.logging.main import setup_logger, teardown_logger
 from runner.utils.logging.terminal_error import (
+    Budget,
     FaultKind,
+    budget_exhausted,
     peek_terminal_error,
     peek_terminal_fault,
 )
@@ -182,9 +185,11 @@ async def main(
             async with asyncio.timeout(settings.AGENT_TIMEOUT_SECONDS):
                 output = await agent_impl(run_input)
         except TimeoutError:
-            logger.error(
-                f"Agent timed out after {settings.AGENT_TIMEOUT_SECONDS} seconds"
-            )
+            logger.bind(
+                fault=budget_exhausted(
+                    Budget.WALL_CLOCK, settings.AGENT_TIMEOUT_SECONDS
+                )
+            ).error(f"Agent timed out after {settings.AGENT_TIMEOUT_SECONDS} seconds")
             output = AgentTrajectoryOutput(
                 messages=[],
                 status=AgentStatus.ERROR,
@@ -336,6 +341,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, help="Path to save output JSON")
 
     args = parser.parse_args()
+    load_env_file()
+    require_provider_keys(args.orchestrator_model)
 
     with open(args.initial_messages) as f:
         initial_messages = json.load(f)
