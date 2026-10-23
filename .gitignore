@@ -223,3 +223,6 @@ outputs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local-only Claude instructions
+CLAUDE.local.md

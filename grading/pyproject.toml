@@ -55,13 +55,6 @@ dependencies = [
     "datasketch==2.0.0",           # HarmBench copyright MinHash grader
     "spacy==3.8.16",
     "en-core-web-sm==3.8.0",
-    "cadquery-ocp-novtk>=7.9.3.1,<8",  # OCCT kernel bindings for cad_llm_judge probes (no VTK)
-    "trimesh>=5,<6",                   # mesh measurement + tessellation for cad_llm_judge
-    "rtree>=1.3",                      # trimesh proximity/ray queries (cad_llm_judge probes)
-    "scipy>=1.14",                     # trimesh ICP alignment for cad_llm_judge golden compare
-    "cadquery==2.8.0",                 # cadbench_geometry runs model CadQuery code; VTK deps dropped below
-    "manifold3d>=3.5,<4",              # trimesh boolean engine for cadbench_geometry IoU
-    "pymeshlab==2025.7.post1",         # alpha-wrap before cadbench_geometry IoU, as upstream CADBench does
     "pylatexenc==2.10",                # LaTeX-to-text for MonitorBench's vendored DeepScaleR grader
     "sympy==1.13.3",                   # MonitorBench's DeepScaleR grader imports it at load time; same pin as data-science
     "rouge-score==0.1.2",
@@ -107,17 +100,6 @@ exclude-newer = "7 days"
 # the antigravity harness caps turns. It was published inside the 7-day window,
 # so resolution needs this override until the window moves past 2026-08-13.
 exclude-newer-package = {  google-antigravity = "2026-08-14T00:00:00Z" }
-# cadquery hard-depends on the VTK OCP build and its viewer stack; the grader uses
-# cadquery-ocp-novtk and stubs the VTK imports (runner/evals/cadbench_geometry/vtk_stub.py).
-override-dependencies = [
-    "cadquery-ocp; sys_platform == 'never'",
-    "vtk; sys_platform == 'never'",
-    "trame; sys_platform == 'never'",
-    "trame-vtk; sys_platform == 'never'",
-    "trame-components; sys_platform == 'never'",
-    "trame-vuetify; sys_platform == 'never'",
-    "numba; sys_platform == 'never'",
-]
 
 [tool.basedpyright]
 typeCheckingMode = "recommended"

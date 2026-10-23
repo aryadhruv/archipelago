@@ -79,11 +79,6 @@ RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(
  && ( cd /app/mcp_servers/spreadsheets && apt-get update -qq && apt-get install -y -qq libreoffice-calc; uv sync --all-extras ) \
  && rm -f ~/.gitconfig
 
-# Install: edgar_sec
-RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null) && if [ -n "$UV_GITHUB_TOKEN" ]; then git config --global url."https://x-access-token:${UV_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi \
- && ( cd /app/mcp_servers/edgar_sec && export STATE_LOCATION=/.apps_data/edgar_sec && uv sync --all-extras ) \
- && rm -f ~/.gitconfig
-
 ENV PATH=/app/.venv/bin:$PATH \
     UV_SYSTEM_PYTHON=1 \
     PORT=8080
