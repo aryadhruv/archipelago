@@ -21,7 +21,8 @@ export EXAMPLE_DIR="$SCRIPT_DIR"
 export ENVIRONMENT_DIR="$ARCHIPELAGO_DIR/environment"
 export AGENTS_DIR="$ARCHIPELAGO_DIR/agents"
 export GRADING_DIR="$ARCHIPELAGO_DIR/grading"
-export ENV_URL="http://localhost:8080"
+# Set COMPOSE_PROJECT_NAME and ENV_PORT to run several examples side by side
+export ENV_URL="${ENV_URL:-http://localhost:${ENV_PORT:-8080}}"
 
 echo "============================================================"
 echo "SIMPLE TASK EXAMPLE"

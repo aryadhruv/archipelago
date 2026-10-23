@@ -1,11 +1,17 @@
+# One environment per compose project. To run several side by side, give each
+# worker its own project name and host port:
+#   COMPOSE_PROJECT_NAME=archipelago-w1 ENV_PORT=8081 docker compose up -d
+# All projects share the image below, so it is built once.
+name: archipelago
+
 services:
   environment:
     build:
       context: ..
       dockerfile: environment/Dockerfile
-    container_name: archipelago-environment
+    image: archipelago-environment:local
     ports:
-      - "8080:8080"
+      - "${ENV_PORT:-8080}:8080"
     env_file:
       - .env
     healthcheck:

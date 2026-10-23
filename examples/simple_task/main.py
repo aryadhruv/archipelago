@@ -34,7 +34,9 @@ ENVIRONMENT_DIR = Path(
 AGENTS_DIR = Path(os.environ.get("AGENTS_DIR", ARCHIPELAGO_DIR / "agents"))
 GRADING_DIR = Path(os.environ.get("GRADING_DIR", ARCHIPELAGO_DIR / "grading"))
 
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:8080")
+ENV_URL = os.environ.get(
+    "ENV_URL", f"http://localhost:{os.environ.get('ENV_PORT', '8080')}"
+)
 
 
 def log(msg: str):
