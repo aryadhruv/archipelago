@@ -143,7 +143,7 @@ judge.
 | Agent produced it and it is wrong | plain scored `0.0` | yes, `0.0` |
 
 `agentic_verifier` and `agentic_verifier_criterion` emit every cause in the
-table. `cad_llm_judge`, `db_code_verifier` and `db_diff_llm` emit some of
+table. `db_code_verifier` and `db_diff_llm` emit some of
 them. If your situation needs one that is not listed, see
 [Adding a new cause](#adding-a-new-cause). Do not stretch an existing cause to
 fit, because a query groups on it.

@@ -15,6 +15,8 @@ All components run in Docker containers.
 
 The environment is meant to be run independently as a sandbox, and then an LLM agent connects to the exposed MCP server. The agents runner spawns and manages environment sandboxes automatically.
 
+> This is a fork of [Mercor-Intelligence/archipelago](https://github.com/Mercor-Intelligence/archipelago). See [docs/fork-changes.md](./docs/fork-changes.md) for what differs.
+
 ## Table of Contents
 
 - [Quick Start: Run Your First Task](#quick-start-run-your-first-task)
@@ -40,8 +42,8 @@ This quick start walks you through running a single task end-to-end using the pr
 
 - Docker Desktop
 - Python 3.13
-- UV
-- LLM API key (Anthropic, OpenAI, or Gemini)
+- UV 0.13.4 or newer (older versions can't parse `exclude-newer = "7 days"`). Install with `uv sync --locked`, never a plain `uv sync`.
+- LLM API key (Anthropic, OpenAI, Gemini or OpenRouter)
 
 ### 1. Set Up Environment Variables
 
@@ -57,6 +59,9 @@ cp grading/.env.example grading/.env
 # ANTHROPIC_API_KEY=sk-ant-...
 # or OPENAI_API_KEY=sk-...
 # or GOOGLE_API_KEY=...
+# or OPENROUTER_API_KEY=sk-or-...
+# Each runner loads its own .env and exits at startup if the key for its model
+# (agent: orchestrator model, grading: llm_judge_model) is missing.
 
 # The environment/.env can be left as-is for local development
 ```
@@ -422,7 +427,7 @@ The easiest way to run Archipelago locally is using Docker.
    ```
 
    Required variables:
-   - LLM API keys (at least one): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GOOGLE_API_KEY`
+   - LLM API keys (at least one): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, or `OPENROUTER_API_KEY`
    
    Optional:
    - Redis connection (for logging)
@@ -430,7 +435,7 @@ The easiest way to run Archipelago locally is using Docker.
 3. **Install Dependencies:**
 
    ```bash
-   uv sync
+   uv sync --locked
    ```
 
 4. **Run Locally:**
