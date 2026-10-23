@@ -29,13 +29,17 @@ cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 ### Local patches (uncommitted, from the test run)
 
 - `examples/simple_task/{orchestrator_config,grading_settings,mcp_config}.json` were switched to OpenRouter and the venv/stdio settings above.
-- `examples/simple_task/patches/read_image_file.py` is bind-mounted by `environment/docker-compose.override.yml`. It sniffs the image format from magic bytes because the snapshot's JPEGs are named `.png` and Anthropic rejects them. This should become a real fix in `mcp_servers/filesystem` (see below).
+- The old clone bind-mounted a patched `read_image_file.py` through `environment/docker-compose.override.yml`. That is now fixed in the server (backlog item 1), so don't carry the override over.
 
 ## Fix-up backlog
 
 ### Must fix
-1. **Image MIME detection.** Move the magic-byte sniffing into `mcp_servers/filesystem/.../tools/read_image_file.py`, and check the pdfs and documents image tools for the same bug. Then delete the override and the patch.
-2. **Errors vs. fails.** If any verifier errors, for example because the judge's API call fails, the whole run gets `final_score: null` and `grading_run_status: error`. The leaderboard must count these as harness failures and rerun them, not score them.
+1. ~~**Image MIME detection.**~~ Done: `read_image_file` sniffs PNG/JPEG/GIF/WebP magic bytes and falls back to the extension. The documents, pdfs and presentations image tools re-encode to JPEG, so they were never affected.
+2. ~~**Errors vs. fails.**~~ Grading already does the right thing, and the outer agent timeout now records a `wall_clock` fault. The grid runner and leaderboard (items 7–8) must apply this rule:
+   - Grading: a verifier that raises or returns `status: error` (judge API failure, auth error) makes the whole run `grading_run_status: error` with `final_score: null`. Every scoring method refuses to score around errored criteria, and judge calls retry transient errors 5 times first. Rerun grading; never record a score.
+   - Agent `status: failed` is the model's fault (steps or output budget exhausted, context overflow, bad request). Grade it and count it as scored.
+   - Agent `status: error` is infra (rate limit, 5xx, connection, MCP timeout). Rerun it, unless `fault` is `{"kind": "budget_exhausted", "budget": "wall_clock"}`: that is a timeout, which the fairness rules count as a fail (score 0).
+   - Agent `status: cancelled` means the run was torn down externally. Rerun it.
 3. **Judge prompt is garbled.** The judge's "original task" section contained `ValidatorIterator(…)` instead of the prompt text, and image messages aren't converted to text. Fix this in the grading prompt builder.
 4. **Context window fallback.** When LiteLLM doesn't know a model's context size, the runner assumes 128,000 tokens, which shifts when ReSum summarisation starts. Require `context_window_tokens` per model.
 5. **Env loading.** Make the agent and grading runners load their `.env`, or fail early when keys are missing. A missing key currently surfaces later as an OpenRouter 401 in the judge.
