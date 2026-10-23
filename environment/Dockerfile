@@ -66,11 +66,6 @@ RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(
  && ( cd /app/mcp_servers/presentations && uv sync --all-extras ) \
  && rm -f ~/.gitconfig
 
-# Install: fmp
-RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null) && if [ -n "$UV_GITHUB_TOKEN" ]; then git config --global url."https://x-access-token:${UV_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi \
- && ( cd /app/mcp_servers/fmp && export STATE_LOCATION=/.apps_data/fmp && uv sync --all-extras ) \
- && rm -f ~/.gitconfig
-
 # Install: chat
 RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null) && if [ -n "$UV_GITHUB_TOKEN" ]; then git config --global url."https://x-access-token:${UV_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi \
  && ( cd /app/mcp_servers/chat && uv sync --all-extras ) \
