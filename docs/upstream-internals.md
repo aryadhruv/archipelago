@@ -52,6 +52,7 @@ See backlog item 10 in `CLAUDE.md`.
 
 ### Scripts
 
+- The code server's install task (`mise.toml [tasks.install]`, configured through `arco.toml`), which builds the sandbox package mirror at `/usr/local/lib/code_execution`. `environment/Dockerfile` now does that itself.
 - `scripts/sync_eval_definitions.sh` (copies the eval registry into Studio's
   server registry; mentioned in `registry.py` and `grading/README.md`).
 
