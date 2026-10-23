@@ -8,7 +8,7 @@ Upstream is `Mercor-Intelligence/archipelago`. Its commits are automated syncs (
 
 - `environment/`: a Docker FastAPI sandbox on `:8080`. Endpoints: `/health`, `/data/populate?subsystem=filesystem`, `/apps` (MCP gateway config), `/mcp/`, `/data/snapshot`, `/docs`. `POST /apps` starts each configured MCP server over stdio and returns 503 if they aren't ready within about 5 minutes. Entry point: `environment/runner/main.py`.
 - `agents/`: the agent runner, started with `uv run python -m runner.main` and routed through LiteLLM. The harnesses are in `agents/runner/agents/`. The one we use is `react_toolbelt_agent`. It starts with only meta-tools, so the model must find and add tools itself.
-- `grading/`: the grading runner, also `uv run python -m runner.main`. It has 75 verifier types, an LLM judge, and scoring methods (`template` is a plain average, and weighted scoring is available).
+- `grading/`: the grading runner, also `uv run python -m runner.main`. It has 67 verifier types (the CAD ones were removed in this fork), an LLM judge, and scoring methods (`template` is a plain average, and weighted scoring is available).
 - `mcp_servers/`: 9 servers that work on local files only: filesystem, spreadsheets, documents, pdfs, mail (mbox), calendar (.ics), chat, code, presentations. Each server has its own `.venv`. This fork removed the external market-data servers (`fmp`, `edgar_sec`).
 - `examples/`: thin wrappers. `simple_task/main.py` runs populate → `/apps` → agent → snapshot → grading.
 

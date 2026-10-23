@@ -114,15 +114,6 @@ class EvalIds(StrEnum):
     CODE_EXECUTION = "code_execution"
     # Code runner verifier - executes a user/LLM-authored def check(ctx) against the snapshot
     LLM_CODE_VERIFIER = "llm_code_verifier"
-    # KiCad EDA domain-specific verifiers
-    KICAD_FIELD_CHECK = "kicad_field_check"
-    KICAD_LVS_CHECK = "kicad_lvs_check"
-    KICAD_ROUTING_COMPLETENESS = "kicad_routing_completeness"
-    KICAD_DRC_JLCPCB = "kicad_drc_jlcpcb"
-    KICAD_LAYOUT_QUALITY = "kicad_layout_quality"
-    KICAD_SPICE_CHECK = "kicad_spice_check"
-    # FreeCAD CAD domain-specific verifiers
-    FREECAD_FIELD_CHECK = "freecad_field_check"
     # Jenkins CI domain-specific verifiers
     JENKINS_FIELD_CHECK = "jenkins_field_check"
     # Playground snapshot verifier - compares playground snapshot state (stub)
@@ -149,12 +140,6 @@ class EvalIds(StrEnum):
     # DB Diff LLM Difficulty Weighted - db_diff_llm with a Low/Medium/High difficulty field
     # intended to be paired with the difficulty_weighted_average scoring method.
     DB_DIFF_LLM_DIFFICULTY_WEIGHTED = "db_diff_llm_difficulty_weighted"
-    # CAD LLM judge — plan → probe → judge over CAD files (FCStd/STEP/STL/
-    # IGES/DXF/Gerber) from the final snapshot: digests plus measured geometry
-    # (OCCT/mesh probes, planner-directed from a fixed catalog) plus offscreen
-    # renders judged multimodally. Kernel-recompute and simulation criteria
-    # return "unverifiable", never a guess.
-    CAD_LLM_JUDGE = "cad_llm_judge"
 
     @classmethod
     def _missing_(cls, value: object) -> "EvalIds | None":
