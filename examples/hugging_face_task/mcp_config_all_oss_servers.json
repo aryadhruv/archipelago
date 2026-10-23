@@ -127,35 +127,6 @@
         "APP_DOCS_ROOT": "/filesystem",
         "MCP_TRANSPORT": "stdio"
       }
-    },
-    "edgar_sec": {
-      "transport": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "python",
-        "main.py"
-      ],
-      "cwd": "/app/mcp_servers/edgar_sec/mcp_servers/edgar_sec",
-      "env": {
-        "EDGAR_OFFLINE_MODE": "false",
-        "EDGAR_USER_AGENT": "Mercor APEX-Agents apex@mercor.com",
-        "MCP_TRANSPORT": "stdio"
-      }
-    },
-    "fmp_server": {
-      "transport": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "python",
-        "main.py"
-      ],
-      "cwd": "/app/mcp_servers/fmp/mcp_servers/fmp_server",
-      "env": {
-        "FMP_OFFLINE_MODE": "false",
-        "MCP_TRANSPORT": "stdio"
-      }
     }
   }
 }
