@@ -16,7 +16,7 @@ Upstream is `Mercor-Intelligence/archipelago`. Its commits are automated syncs (
 ## Running locally
 
 ```bash
-set -a && source agents/.env && set +a     # runner does NOT load .env itself; key = OPENROUTER_API_KEY
+# agents/.env and grading/.env each need OPENROUTER_API_KEY; each runner loads its own
 cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 ```
 
@@ -42,7 +42,7 @@ cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
    - Agent `status: cancelled` means the run was torn down externally. Rerun it.
 3. ~~**Judge prompt is garbled.**~~ Done. Pydantic validates list-of-blocks message content into a read-once `ValidatorIterator`, and the judge's task-prompt extractors called `str()` on it. `output_llm` now resolves the content first and renders images as `[image_url omitted]`. `criterion_output_verifier`, `deep_research`, `posttraining_tool_call_check` and `response_tool_verifier` now use `runner.utils.task_prompt`. Any new code that reads `trajectory.messages[*]["content"]` must call `resolve_lazy_content(msg)` first.
 4. ~~**Context window fallback.**~~ Done. Every `openrouter/...` model string misses the window table (OpenRouter isn't a known lane, on purpose, since a router can serve a smaller window), so the runner silently assumed 128,000 tokens and moved the point where ReSum summarisation starts. Setting `CONTEXT_WINDOW_FALLBACK_ENABLED=false` makes the agent runner raise instead. The grid runner must set it, pass `context_window_tokens` for every model, and check this before launching: an agent that raises ends as `status: error`, which item 2's rule would retry forever.
-5. **Env loading.** Make the agent and grading runners load their `.env`, or fail early when keys are missing. A missing key currently surfaces later as an OpenRouter 401 in the judge.
+5. ~~**Env loading.**~~ Done. Each runner's CLI loads its own `<runner>/.env` (variables already set win). It then exits before any work if the orchestrator or judge model's provider key is missing (`litellm.validate_environment`; skipped when `LLM_GATEWAY_API_BASE` is set). The old 401 came from litellm's import-time `load_dotenv()`, which only looks in the cwd: the example runs grading from `grading/`, which had no `.env`.
 
 ### Build
 6. **Parallel runs.** The compose file fixes the container name `archipelago-environment` and port `8080`, so concurrent runs collide. Make the compose project name and port configurable per worker. The scripts already read `ENV_URL`.

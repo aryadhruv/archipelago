@@ -29,6 +29,7 @@ from runner.utils.decorators import (
     orchestrator_id_ctx,
     orchestrator_version_ctx,
 )
+from runner.utils.env_file import load_env_file, require_provider_keys
 from runner.utils.logging.main import setup_logger, teardown_logger
 from runner.utils.logging.terminal_error import (
     Budget,
@@ -340,6 +341,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, help="Path to save output JSON")
 
     args = parser.parse_args()
+    load_env_file()
+    require_provider_keys(args.orchestrator_model)
 
     with open(args.initial_messages) as f:
         initial_messages = json.load(f)
