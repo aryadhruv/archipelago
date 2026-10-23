@@ -3,6 +3,7 @@ from typing import Any
 
 from runner.evals.models import EvalImplInput
 from runner.utils.token_utils import count_tokens, resolve_judge_context_limit
+from runner.utils.trajectory import resolve_lazy_content
 
 from ..artifact_filters import (
     artifact_matches_filters,
@@ -244,6 +245,11 @@ def extract_task_prompt(input: EvalImplInput) -> str | None:
     """
     if not input.trajectory or not input.trajectory.messages:
         return None
+
+    # Content can be a read-once ValidatorIterator; str() of it would put the
+    # iterator's repr into the judge prompt instead of the task text.
+    for msg in input.trajectory.messages:
+        resolve_lazy_content(msg)
 
     # Count user messages to detect multi-turn
     user_messages = [

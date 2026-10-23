@@ -10,6 +10,7 @@ from runner.helpers.models import HelperIds
 from runner.helpers.snapshot_diff import extract_artifact_changes_from_diff
 from runner.models import VerifierResult
 from runner.utils.llm import build_messages, call_llm
+from runner.utils.task_prompt import task_prompt as read_task_prompt
 
 from ..output_llm.utils.prompts import GradingResponseSchema
 from ..output_llm.utils.services.artifact_evaluate import select_artifacts_to_evaluate
@@ -34,15 +35,8 @@ Respond with:
 
 def _extract_task_prompt(input: EvalImplInput) -> str | None:
     """Extract the task prompt from trajectory (first user message)."""
-    if not input.trajectory or not input.trajectory.messages:
-        return None
-
-    for msg in input.trajectory.messages:
-        if msg.get("role") == "user" and msg.get("content"):
-            content = msg.get("content")
-            return str(content) if content else None
-
-    return None
+    text, _ = read_task_prompt(input.trajectory)
+    return text or None
 
 
 def _build_deep_research_prompt(

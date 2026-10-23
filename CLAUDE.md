@@ -40,7 +40,7 @@ cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
    - Agent `status: failed` is the model's fault (steps or output budget exhausted, context overflow, bad request). Grade it and count it as scored.
    - Agent `status: error` is infra (rate limit, 5xx, connection, MCP timeout). Rerun it, unless `fault` is `{"kind": "budget_exhausted", "budget": "wall_clock"}`: that is a timeout, which the fairness rules count as a fail (score 0).
    - Agent `status: cancelled` means the run was torn down externally. Rerun it.
-3. **Judge prompt is garbled.** The judge's "original task" section contained `ValidatorIterator(…)` instead of the prompt text, and image messages aren't converted to text. Fix this in the grading prompt builder.
+3. ~~**Judge prompt is garbled.**~~ Done. Pydantic validates list-of-blocks message content into a read-once `ValidatorIterator`, and the judge's task-prompt extractors called `str()` on it. `output_llm` now resolves the content first and renders images as `[image_url omitted]`. `criterion_output_verifier`, `deep_research`, `posttraining_tool_call_check` and `response_tool_verifier` now use `runner.utils.task_prompt`. Any new code that reads `trajectory.messages[*]["content"]` must call `resolve_lazy_content(msg)` first.
 4. **Context window fallback.** When LiteLLM doesn't know a model's context size, the runner assumes 128,000 tokens, which shifts when ReSum summarisation starts. Require `context_window_tokens` per model.
 5. **Env loading.** Make the agent and grading runners load their `.env`, or fail early when keys are missing. A missing key currently surfaces later as an OpenRouter 401 in the judge.
 
