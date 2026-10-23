@@ -47,6 +47,7 @@ from loguru import logger
 from runner.agents.models import LitellmAnyMessage, get_msg_role
 from runner.utils.context_windows import lookup_context_window
 from runner.utils.decorators import model_rates_ctx
+from runner.utils.settings import get_settings
 
 # Used when litellm cannot price the model (internal aliases, gateway-only
 # names). Deliberately Gemini-sized rather than a conservative 128k: an
@@ -269,6 +270,13 @@ def resolve_max_input_tokens(
 
     if provider is not None:
         return provider
+
+    if not get_settings().CONTEXT_WINDOW_FALLBACK_ENABLED:
+        raise ValueError(
+            f"No context window known for {model!r} and "
+            "CONTEXT_WINDOW_FALLBACK_ENABLED is false. Set context_window_tokens "
+            "in the agent config for this model."
+        )
 
     logger.bind(message_type="context", model=model).warning(
         f"No usable max_input_tokens for {model!r}; falling back to {fallback} "
