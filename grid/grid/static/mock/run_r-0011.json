@@ -1,0 +1,71 @@
+{
+  "run_id": "r-0011",
+  "task_id": "reply_scheduling_request",
+  "model_id": "model_e",
+  "repeat": 1,
+  "attempt": 3,
+  "state": "gave_up",
+  "phase": "done",
+  "score": null,
+  "agent_status": "error",
+  "classification": "fail_timeout",
+  "started_at": "2026-10-25T09:04:08Z",
+  "finished_at": "2026-10-25T09:12:02Z",
+  "duration_s": 474,
+  "tokens": 37746,
+  "steps": 4,
+  "tool_calls": 6,
+  "attempts": [
+    {
+      "attempt": 1,
+      "state": "retry",
+      "reason": "rerun_agent: provider returned 502 during step 3",
+      "started_at": "2026-10-25T09:04:08Z",
+      "finished_at": "2026-10-25T09:05:08Z"
+    },
+    {
+      "attempt": 2,
+      "state": "retry",
+      "reason": "fail_timeout: provider call timed out after 180 s",
+      "started_at": "2026-10-25T09:07:38Z",
+      "finished_at": "2026-10-25T09:10:58Z"
+    },
+    {
+      "attempt": 3,
+      "state": "gave_up",
+      "reason": "fail_timeout: provider call timed out after 180 s",
+      "started_at": "2026-10-25T09:11:08Z",
+      "finished_at": "2026-10-25T09:12:02Z"
+    }
+  ],
+  "usage": {
+    "call_log": [
+      {
+        "prompt_tokens": 5793,
+        "completion_tokens": 549,
+        "reasoning_tokens": 78
+      },
+      {
+        "prompt_tokens": 7829,
+        "completion_tokens": 295,
+        "reasoning_tokens": 76
+      },
+      {
+        "prompt_tokens": 9871,
+        "completion_tokens": 697,
+        "reasoning_tokens": 520
+      },
+      {
+        "prompt_tokens": 12607,
+        "completion_tokens": 105,
+        "reasoning_tokens": 162
+      }
+    ]
+  },
+  "final_answer": null,
+  "grades": {
+    "final_score": null,
+    "grading_run_status": "cancelled",
+    "criteria": []
+  }
+}

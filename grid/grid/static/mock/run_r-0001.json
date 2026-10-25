@@ -1,0 +1,105 @@
+{
+  "run_id": "r-0001",
+  "task_id": "organize_project_folder",
+  "model_id": "model_a",
+  "repeat": 1,
+  "attempt": 1,
+  "state": "scored",
+  "phase": "done",
+  "score": 1.0,
+  "agent_status": "completed",
+  "classification": "scored",
+  "started_at": "2026-10-25T09:00:02Z",
+  "finished_at": "2026-10-25T09:01:34Z",
+  "duration_s": 92,
+  "tokens": 55982,
+  "steps": 5,
+  "tool_calls": 8,
+  "attempts": [
+    {
+      "attempt": 1,
+      "state": "scored",
+      "reason": "scored",
+      "started_at": "2026-10-25T09:00:02Z",
+      "finished_at": "2026-10-25T09:01:34Z"
+    }
+  ],
+  "usage": {
+    "call_log": [
+      {
+        "prompt_tokens": 5823,
+        "completion_tokens": 724,
+        "reasoning_tokens": 238
+      },
+      {
+        "prompt_tokens": 8067,
+        "completion_tokens": 817,
+        "reasoning_tokens": 506
+      },
+      {
+        "prompt_tokens": 11064,
+        "completion_tokens": 605,
+        "reasoning_tokens": 439
+      },
+      {
+        "prompt_tokens": 13219,
+        "completion_tokens": 738,
+        "reasoning_tokens": 235
+      },
+      {
+        "prompt_tokens": 14738,
+        "completion_tokens": 187,
+        "reasoning_tokens": 385
+      }
+    ]
+  },
+  "final_answer": "Moved 4 files from /inbox_drop into project folders, renamed 3 to the lowercase_with_underscores convention, removed 1 exact duplicate (old_plan_FINAL.docx matched alpha/plan.docx byte for byte), and wrote /projects/CHANGELOG.md listing each change.",
+  "grades": {
+    "final_score": 1.0,
+    "grading_run_status": "completed",
+    "criteria": [
+      {
+        "verifier_id": "ver_file_exists_1",
+        "criteria": "All files from /inbox_drop are moved into a project folder",
+        "score": 1.0,
+        "passed": true,
+        "rationale": "Confirmed in the final snapshot."
+      },
+      {
+        "verifier_id": "ver_llm_judge_2",
+        "criteria": "File names follow the convention in README.md",
+        "score": 1.0,
+        "passed": true,
+        "rationale": "Confirmed in the final snapshot."
+      },
+      {
+        "verifier_id": "ver_llm_judge_3",
+        "criteria": "Exact duplicates are deleted and nothing else is",
+        "score": 1.0,
+        "passed": true,
+        "rationale": "Confirmed in the final snapshot."
+      },
+      {
+        "verifier_id": "ver_llm_judge_4",
+        "criteria": "CHANGELOG.md exists and lists every move",
+        "score": 1.0,
+        "passed": true,
+        "rationale": "Confirmed in the final snapshot."
+      },
+      {
+        "verifier_id": "ver_llm_judge_5",
+        "criteria": "CHANGELOG.md entries match the actual changes",
+        "score": 1.0,
+        "passed": true,
+        "rationale": "Confirmed in the final snapshot."
+      },
+      {
+        "verifier_id": "ver_snapshot_diff_6",
+        "criteria": "No files outside /inbox_drop were modified",
+        "score": 1.0,
+        "passed": true,
+        "rationale": "Confirmed in the final snapshot."
+      }
+    ]
+  }
+}

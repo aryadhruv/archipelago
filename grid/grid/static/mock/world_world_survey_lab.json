@@ -1,0 +1,37 @@
+{
+  "world_id": "world_survey_lab",
+  "files": [
+    {
+      "path": "/data/survey_responses.csv",
+      "size_bytes": 40455
+    },
+    {
+      "path": "/data/survey_responses_clean.xlsx",
+      "size_bytes": 189515
+    },
+    {
+      "path": "/data/codebook.md",
+      "size_bytes": 224822
+    },
+    {
+      "path": "/data/regions.csv",
+      "size_bytes": 396581
+    },
+    {
+      "path": "/analysis/notebook_notes.txt",
+      "size_bytes": 144660
+    },
+    {
+      "path": "/analysis/helpers.py",
+      "size_bytes": 25706
+    },
+    {
+      "path": "/output/.keep",
+      "size_bytes": 147534
+    },
+    {
+      "path": "/brief.md",
+      "size_bytes": 53725
+    }
+  ]
+}

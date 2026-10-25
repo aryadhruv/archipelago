@@ -1,0 +1,216 @@
+{
+  "grid_id": "grid-2026-10-25-a",
+  "created_at": "2026-10-25T08:50:00Z",
+  "image_tag": "archipelago-env:2026.10.24-3",
+  "git_sha": "6b4836e",
+  "repeats": 3,
+  "max_parallel": 6,
+  "judge_model": "openrouter/vendor-g/judge-model",
+  "worlds": [
+    {
+      "world_id": "world_project_drive",
+      "name": "Shared project drive",
+      "size_bytes": 5216678,
+      "file_count": 16,
+      "apps": [
+        "filesystem_server",
+        "docs_server",
+        "sheets_server",
+        "slides_server",
+        "pdf_server"
+      ]
+    },
+    {
+      "world_id": "world_team_inbox",
+      "name": "Team inbox and calendar",
+      "size_bytes": 4010603,
+      "file_count": 11,
+      "apps": [
+        "filesystem_server",
+        "mail_server",
+        "calendar_server",
+        "chat_server",
+        "docs_server",
+        "slides_server"
+      ]
+    },
+    {
+      "world_id": "world_survey_lab",
+      "name": "Survey research workspace",
+      "size_bytes": 3880505,
+      "file_count": 8,
+      "apps": [
+        "filesystem_server",
+        "sheets_server",
+        "code_execution_server",
+        "slides_server"
+      ]
+    },
+    {
+      "world_id": "world_club_records",
+      "name": "Community club records",
+      "size_bytes": 1371689,
+      "file_count": 6,
+      "apps": [
+        "filesystem_server",
+        "sheets_server",
+        "docs_server",
+        "mail_server"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "organize_project_folder",
+      "task_name": "Organize project folder",
+      "world_id": "world_project_drive",
+      "prompt": "The /inbox_drop folder is a mess. Move each file into the right project folder, rename files to the lowercase_with_underscores convention described in /projects/README.md, and delete exact duplicates. Write a short log of every change to /projects/CHANGELOG.md.",
+      "criteria_count": 6,
+      "mcp_servers": [
+        "filesystem_server",
+        "docs_server"
+      ]
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "task_name": "Reply to a scheduling request",
+      "world_id": "world_team_inbox",
+      "prompt": "Find the most recent email asking to schedule a project sync. Check the team calendar for a 45-minute slot next week when all three people are free, create the event, and reply to the sender with the time.",
+      "criteria_count": 5,
+      "mcp_servers": [
+        "mail_server",
+        "calendar_server"
+      ]
+    },
+    {
+      "task_id": "chart_from_survey",
+      "task_name": "Build a chart from survey data",
+      "world_id": "world_survey_lab",
+      "prompt": "Using /data/survey_responses.csv and the codebook, compute the share of respondents per satisfaction level by region and add a one-slide deck at /output/satisfaction.pptx with a clustered bar chart and a one-sentence takeaway.",
+      "criteria_count": 7,
+      "mcp_servers": [
+        "sheets_server",
+        "code_execution_server",
+        "slides_server"
+      ]
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "task_name": "Summarize meeting notes into a doc",
+      "world_id": "world_project_drive",
+      "prompt": "Summarize the two meeting notes in /meetings into a one-page document using /templates/summary_template.docx. Include decisions, owners, and open questions. Save it as /meetings/october_summary.docx.",
+      "criteria_count": 6,
+      "mcp_servers": [
+        "filesystem_server",
+        "docs_server"
+      ]
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "task_name": "Clean up a contacts spreadsheet",
+      "world_id": "world_club_records",
+      "prompt": "Clean /members/contacts.xlsx: trim whitespace, standardize phone numbers to the format in the style guide, merge duplicate people, and flag rows missing an email in a new column. Keep the original tab.",
+      "criteria_count": 8,
+      "mcp_servers": [
+        "sheets_server",
+        "filesystem_server"
+      ]
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "task_name": "Draft an agenda for a team offsite",
+      "world_id": "world_team_inbox",
+      "prompt": "Read the #general thread about the offsite and the ideas doc, then draft a one-day agenda as /docs/offsite_agenda.docx and post a link with a two-line summary in the thread.",
+      "criteria_count": 5,
+      "mcp_servers": [
+        "chat_server",
+        "docs_server",
+        "calendar_server"
+      ]
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "task_name": "Compare two versions of a guide",
+      "world_id": "world_project_drive",
+      "prompt": "Compare /projects/beta/spec_v1.pdf and spec_v2.pdf. List every added, removed or changed requirement in a table in /projects/beta/spec_changes.docx.",
+      "criteria_count": 6,
+      "mcp_servers": [
+        "pdf_server",
+        "docs_server"
+      ]
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "task_name": "Turn a chat thread into status slides",
+      "world_id": "world_team_inbox",
+      "prompt": "Turn the #launch thread from the past week into a three-slide status update based on /docs/status_template.pptx: progress, risks, next steps.",
+      "criteria_count": 5,
+      "mcp_servers": [
+        "chat_server",
+        "slides_server"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "id": "model_a",
+      "label": "Model A",
+      "model": "openrouter/vendor-a/model-a",
+      "provider": "vendor-a",
+      "context_window_tokens": 200000,
+      "max_concurrency": 4,
+      "color": "#2a78d6"
+    },
+    {
+      "id": "model_b",
+      "label": "Model B",
+      "model": "openrouter/vendor-b/model-b",
+      "provider": "vendor-b",
+      "context_window_tokens": 128000,
+      "max_concurrency": 4,
+      "color": "#eb6834"
+    },
+    {
+      "id": "model_c",
+      "label": "Model C",
+      "model": "openrouter/vendor-c/model-c",
+      "provider": "vendor-c",
+      "context_window_tokens": 256000,
+      "max_concurrency": 3,
+      "color": "#1baf7a"
+    },
+    {
+      "id": "model_d",
+      "label": "Model D",
+      "model": "openrouter/vendor-d/model-d",
+      "provider": "vendor-d",
+      "context_window_tokens": 128000,
+      "max_concurrency": 4,
+      "color": "#eda100"
+    },
+    {
+      "id": "model_e",
+      "label": "Model E",
+      "model": "openrouter/vendor-e/model-e",
+      "provider": "vendor-e",
+      "context_window_tokens": 64000,
+      "max_concurrency": 2,
+      "color": "#e87ba4"
+    },
+    {
+      "id": "model_f",
+      "label": "Model F",
+      "model": "openrouter/vendor-f/model-f",
+      "provider": "vendor-f",
+      "context_window_tokens": 1000000,
+      "max_concurrency": 3,
+      "color": "#008300"
+    }
+  ],
+  "totals": {
+    "tasks": 8,
+    "models": 6,
+    "repeats": 3,
+    "runs": 144
+  }
+}

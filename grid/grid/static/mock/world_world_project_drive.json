@@ -1,0 +1,69 @@
+{
+  "world_id": "world_project_drive",
+  "files": [
+    {
+      "path": "/projects/README.md",
+      "size_bytes": 212956
+    },
+    {
+      "path": "/projects/alpha/plan.docx",
+      "size_bytes": 158709
+    },
+    {
+      "path": "/projects/alpha/budget_draft.xlsx",
+      "size_bytes": 381653
+    },
+    {
+      "path": "/projects/alpha/kickoff.pptx",
+      "size_bytes": 74171
+    },
+    {
+      "path": "/projects/beta/notes.txt",
+      "size_bytes": 218598
+    },
+    {
+      "path": "/projects/beta/spec_v1.pdf",
+      "size_bytes": 180734
+    },
+    {
+      "path": "/projects/beta/spec_v2.pdf",
+      "size_bytes": 197587
+    },
+    {
+      "path": "/meetings/2026-10-14_standup.txt",
+      "size_bytes": 166115
+    },
+    {
+      "path": "/meetings/2026-10-21_review.txt",
+      "size_bytes": 63791
+    },
+    {
+      "path": "/meetings/attendees.csv",
+      "size_bytes": 174109
+    },
+    {
+      "path": "/inbox_drop/IMG_0412.png",
+      "size_bytes": 1312
+    },
+    {
+      "path": "/inbox_drop/untitled (3).docx",
+      "size_bytes": 170556
+    },
+    {
+      "path": "/inbox_drop/old_plan_FINAL.docx",
+      "size_bytes": 394000
+    },
+    {
+      "path": "/inbox_drop/scan_0009.pdf",
+      "size_bytes": 177752
+    },
+    {
+      "path": "/templates/summary_template.docx",
+      "size_bytes": 209202
+    },
+    {
+      "path": "/templates/brand_colors.txt",
+      "size_bytes": 63336
+    }
+  ]
+}
