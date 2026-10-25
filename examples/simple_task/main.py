@@ -34,9 +34,11 @@ ENVIRONMENT_DIR = Path(
 AGENTS_DIR = Path(os.environ.get("AGENTS_DIR", ARCHIPELAGO_DIR / "agents"))
 GRADING_DIR = Path(os.environ.get("GRADING_DIR", ARCHIPELAGO_DIR / "grading"))
 
-ENV_URL = os.environ.get(
-    "ENV_URL", f"http://localhost:{os.environ.get('ENV_PORT') or '8080'}"
-)
+ENV_PORT = os.environ.get("ENV_PORT") or "8080"
+ENV_URL = os.environ.get("ENV_URL", f"http://localhost:{ENV_PORT}")
+# Before environments were per port, the container had this fixed name and
+# held port 8080 under another compose project, which `down` no longer reaches.
+LEGACY_CONTAINER = "archipelago-environment"
 
 
 def log(msg: str):
@@ -55,6 +57,15 @@ def wait_for_health(url: str, timeout: int = 120) -> bool:
             pass
         time.sleep(1)
     return False
+
+
+def remove_legacy_container():
+    """Remove a container left from the old layout, which would hold port 8080."""
+    result = subprocess.run(
+        ["docker", "rm", "-f", LEGACY_CONTAINER], capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        log(f"Removed old-layout container {LEGACY_CONTAINER}")
 
 
 def start_environment():
@@ -76,6 +87,8 @@ def start_environment():
         cwd=ENVIRONMENT_DIR,
         capture_output=True,
     )
+    if ENV_PORT == "8080":
+        remove_legacy_container()
 
     log("Building and starting fresh environment container...")
     result = subprocess.run(
