@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from grid.events import flatten
+from grid.events import TOOLBELT, flatten
 from grid.inputs import Grid, verifiers_for
 from grid.scheduler import grid_order
 from grid.store import ACTIVE_STATES, Run, Store
@@ -302,9 +302,12 @@ def _ci95(scores: list[float]) -> float | None:
 
 def leaderboard_view(grid: Grid, store: Store) -> dict[str, Any]:
     runs = store.runs()
-    tool_counts: dict[str, dict[str, int]] = {}
+    # Every server for every model, zeros included, so profiles line up.
+    servers = [*sorted(grid.mcp_config.get("mcpServers", {})), TOOLBELT]
+    tool_counts = {m.id: dict.fromkeys(servers, 0) for m in grid.models}
     for model_id, server, count in store.tool_call_counts():
-        tool_counts.setdefault(model_id, {})[server or "other"] = count
+        if model_id in tool_counts:
+            tool_counts[model_id][server or "other"] = count
 
     models = []
     for model in grid.models:
