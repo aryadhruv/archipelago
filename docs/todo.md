@@ -7,15 +7,12 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Build
 
-1. **Dashboard.** A live view of a grid, served by the grid runner: an event
-   stream from each run's `agent_events.jsonl` and grading output, a REST + SSE
-   API over `grid.db`, and a plain JavaScript/HTML/CSS frontend (setup and
-   preflight, progress matrix, run detail, a live map of tool calls, infra
-   log). Builds on the grid runner.
-2. **Leaderboard.** Combine `trajectory.json` (steps and token usage) and
-   `grades.json` across runs (`grid.db` has each run's score, tokens and
-   steps). Part of the dashboard.
-3. **Sub-agents.** `agents/runner/utils/subagent.py::spawn_subagent()` exists,
+1. **Dashboard.** The API (`grid serve`) and a static UI preview on mock data
+   exist. What's left: connect the preview to the API (fetch + EventSource),
+   use the leaderboard's `rules` and `pass_score` from the API, poll
+   `GET /api/smoke` (the smoke test runs in the background), and check the UI
+   with a real grid.
+2. **Sub-agents.** `agents/runner/utils/subagent.py::spawn_subagent()` exists,
    but nothing calls it and no harness exposes it as a tool. To allow
    delegation, add a `delegate(task, context)` tool to `react_toolbelt_agent`.
    Then decide whether every model gets it, because it must be the same for
@@ -27,7 +24,7 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      through event triggers, such as a tool call being seen or time elapsing.
      The model being tested can't start them. Tool calls carry an `actor_id`
      (`target_agent` / VCA id / `coordinator`).
-4. **App-state verifiers without servers.** `grading/` has verifiers for
+3. **App-state verifiers without servers.** `grading/` has verifiers for
    third-party app state (QuickBooks, Xero, Workday, SAP, BambooHR,
    Greenhouse, TaxJar), but the repo has no MCP servers for those apps, so
    they can't run as shipped. Either remove them or pair each with a server.
@@ -92,6 +89,9 @@ Apply these in every grid.
   retries with backoff for infra errors, explicit context windows, and the
   errors-vs-fails rules (see `grid/README.md`). State is in SQLite, so a
   stopped grid resumes.
+- **Leaderboard** (`GET /api/leaderboard`): mean score ± CI, pass rate,
+  tokens, time, errors, fails and tool use per model, and a task × model
+  matrix.
 - **Parallel runs.** One environment per port (`archipelago-<port>`),
   `ENV_IMAGE` pinning, default bridge network (#4). The examples remove an
   old-layout container before starting on port 8080 (#5).

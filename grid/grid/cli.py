@@ -3,6 +3,7 @@
 uv run python -m grid validate path/to/grid.json
 uv run python -m grid run path/to/grid.json [--rebuild] [--skip-preflight]
 uv run python -m grid status path/to/grid.json
+uv run python -m grid serve path/to/grid.json [--start] [--port 7000]
 """
 
 import argparse
@@ -59,6 +60,21 @@ async def _run(args) -> int:
     return 0 if not counts.get("gave_up") else 2
 
 
+async def _serve(args) -> int:
+    from grid.server import serve
+
+    grid = load_grid(args.config)
+    store = Store(grid.grid_dir / "grid.db")
+    try:
+        await serve(
+            grid, store, _log, host=args.host, port=args.port,
+            start=args.start, rebuild=args.rebuild,
+        )  # fmt: skip
+    finally:
+        store.close()
+    return 0
+
+
 def _status(args) -> int:
     grid = load_grid(args.config)
     path = grid.grid_dir / "grid.db"
@@ -95,12 +111,23 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("status", help="print each run's state")
     p.add_argument("config", type=Path)
 
+    p = sub.add_parser("serve", help="serve the dashboard and API")
+    p.add_argument("config", type=Path)
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=7000)
+    p.add_argument("--start", action="store_true", help="start the grid right away")
+    p.add_argument(
+        "--rebuild", action="store_true", help="rebuild the environment image"
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "validate":
             return asyncio.run(_validate(args))
         if args.command == "run":
             return asyncio.run(_run(args))
+        if args.command == "serve":
+            return asyncio.run(_serve(args))
         return _status(args)
     except InputError as e:
         print(f"Invalid grid: {e}", file=sys.stderr)

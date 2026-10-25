@@ -5,15 +5,17 @@ error reruns grading on the same trajectory and snapshots, not the agent.
 """
 
 import asyncio
+import contextlib
 import json
 import os
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
 
 from grid.classify import Outcome, Verdict, classify_agent, classify_grading
 from grid.envctl import Environment, InfraError
+from grid.events import AgentEventNormalizer, grading_progress, tail_lines
 from grid.inputs import REPO_DIR, Grid, agent_config_for, verifiers_for
 from grid.store import Run, Store
 from grid.worlds import tar_gz_to_zip
@@ -64,6 +66,18 @@ async def _run_logged(
             raise
 
 
+@contextlib.asynccontextmanager
+async def _tailing(path: Path, on_line: Callable[[str], None]) -> AsyncIterator[None]:
+    """Feed lines appended to path to on_line while the block runs, then drain."""
+    stop = asyncio.Event()
+    task = asyncio.create_task(tail_lines(path, on_line, stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        await task
+
+
 class Worker:
     def __init__(self, grid: Grid, store: Store, image: str, log: Log):
         self.grid = grid
@@ -73,9 +87,14 @@ class Worker:
         self.world_tars: dict[str, dict[str, Path]] = {}
         self.overlay_tars: dict[str, dict[str, Path]] = {}
 
+    def _emit(self, run: Run, kind: str, **data: Any) -> int:
+        return self.store.add_event(
+            kind, run.run_id, model_id=run.model_id, task_id=run.task_id, **data
+        )
+
     def _state(self, run: Run, state: str, **fields: Any) -> None:
         self.store.update_run(run.run_id, state=state, **fields)
-        self.store.add_event("run_state", run.run_id, state=state, **fields)
+        self._emit(run, "run_state", state=state, text=fields.get("reason"), **fields)
         self.log(f"{run.run_id}: {state}")
 
     async def execute(self, run: Run, port: int) -> None:
@@ -85,7 +104,9 @@ class Worker:
         if run.resume_from == "agent":
             outcome = await self._agent_attempt(run, port)
             if outcome.verdict == Verdict.RERUN_AGENT:
-                self._retry_or_give_up(run, "agent", run.agent_attempts + 1, outcome)
+                self._retry_or_give_up(
+                    run, "agent", run.agent_attempts + 1 - run.agent_floor, outcome
+                )
                 return
             if outcome.verdict == Verdict.FAIL_TIMEOUT:
                 self._finish(run, outcome)
@@ -95,7 +116,9 @@ class Worker:
 
         outcome = await self._grading_attempt(run)
         if outcome.verdict == Verdict.RERUN_GRADING:
-            self._retry_or_give_up(run, "grading", run.grading_attempts + 1, outcome)
+            self._retry_or_give_up(
+                run, "grading", run.grading_attempts + 1 - run.grading_floor, outcome
+            )
         else:
             self._finish(run, outcome)
 
@@ -146,14 +169,21 @@ class Worker:
         )
         directory.mkdir(parents=True, exist_ok=True)
         self.store.update_run(
-            run.run_id, agent_attempts=number, attempt_dir=str(directory), port=port
+            run.run_id,
+            agent_attempts=number,
+            attempt_dir=str(directory),
+            port=port,
+            # The last attempt's outcome no longer describes the run.
+            reason=None,
+            classification=None,
+            agent_status=None,
         )
         attempt_id = self.store.start_attempt(run.run_id, "agent", number, directory)
         try:
             outcome = await self._agent_phase(run, port, directory, number)
         except InfraError as e:
             outcome = Outcome(Verdict.RERUN_AGENT, f"infra: {e}")
-            self.store.add_event("infra", run.run_id, reason=str(e)[:2000])
+            self._emit(run, "infra", text=str(e)[:2000])
         self.store.finish_attempt(attempt_id, outcome.verdict.value, outcome.reason)
         return outcome
 
@@ -200,6 +230,8 @@ class Worker:
             run.run_id,
             agent_status=(trajectory or {}).get("status"),
             tokens=usage.get("total_tokens"),
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
             steps=len(usage.get("call_log") or []) or None,
             duration_s=(trajectory or {}).get("time_elapsed"),
         )
@@ -241,10 +273,14 @@ class Worker:
         wall_clock = agent_config["agent_config_values"].get(
             "wall_clock_timeout_sec", 10800
         )
-        code = await _run_logged(
-            cmd, AGENTS_DIR, directory / "agent.stdout.log", env,
-            timeout=float(wall_clock) + self.grid.agent_grace_sec,
-        )  # fmt: skip
+        self.store.update_run(
+            run.run_id, tokens=0, prompt_tokens=0, completion_tokens=0, tool_calls=0
+        )
+        async with _tailing(directory / "agent_events.jsonl", self._agent_line(run)):
+            code = await _run_logged(
+                cmd, AGENTS_DIR, directory / "agent.stdout.log", env,
+                timeout=float(wall_clock) + self.grid.agent_grace_sec,
+            )  # fmt: skip
         if code is None:
             # The harness should stop itself at its wall clock; past that plus
             # the grace period it's still a timeout, which counts as a fail.
@@ -256,6 +292,39 @@ class Worker:
             _write_json(trajectory_path, trajectory)
             return trajectory
         return _read_json(trajectory_path)
+
+    def _agent_line(self, run: Run) -> Callable[[str], None]:
+        normalizer = AgentEventNormalizer(self.grid.mcp_config.get("mcpServers", {}))
+        totals = {"prompt": 0, "completion": 0, "calls": 0}
+
+        def on_line(line: str) -> None:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                return
+            event = normalizer.normalize(record)
+            if event is None:
+                return
+            kind = event.pop("kind")
+            self._emit(run, kind, **event)
+            # Running totals, so a live view needn't sum events. The
+            # trajectory's own numbers replace them when the run ends.
+            if kind == "step" and "prompt_tokens" in event:
+                totals["prompt"] += event["prompt_tokens"]
+                totals["completion"] += event["completion_tokens"]
+            elif kind == "tool_call":
+                totals["calls"] += 1
+            else:
+                return
+            self.store.update_run(
+                run.run_id,
+                prompt_tokens=totals["prompt"],
+                completion_tokens=totals["completion"],
+                tokens=totals["prompt"] + totals["completion"],
+                tool_calls=totals["calls"],
+            )
+
+        return on_line
 
     # grading
 
@@ -283,13 +352,27 @@ class Worker:
             "--scoring-config", str(_write_json(directory / "scoring_config.json", self.grid.scoring_config)),
             "--output", str(grades_path),
         ]  # fmt: skip
-        await _run_logged(
-            cmd,
-            GRADING_DIR,
-            directory / f"grading.{number}.stdout.log",
-            dict(os.environ),
-            None,
-        )
-        outcome = classify_grading(_read_json(grades_path))
+        log_path = directory / f"grading.{number}.stdout.log"
+
+        def on_line(line: str) -> None:
+            if (event := grading_progress(line)) is not None:
+                self._emit(run, event.pop("kind"), **event)
+
+        async with _tailing(log_path, on_line):
+            await _run_logged(cmd, GRADING_DIR, log_path, dict(os.environ), None)
+        grades = _read_json(grades_path)
+        outcome = classify_grading(grades)
         self.store.finish_attempt(attempt_id, outcome.verdict.value, outcome.reason)
+        if outcome.verdict == Verdict.SCORED:
+            self._emit(
+                run,
+                "grade",
+                ok=(outcome.score or 0) >= self.grid.pass_score,
+                text=f"Score {outcome.score:.2f}",
+                score=outcome.score,
+                criteria=[
+                    {"verifier_id": v.get("verifier_id"), "score": v.get("score")}
+                    for v in (grades or {}).get("verifier_results") or []
+                ],
+            )
         return outcome
