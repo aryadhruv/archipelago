@@ -41,6 +41,34 @@ A headless RL environment gateway designed to run in a Docker container. It serv
    # Should return: {"status": "ok"}
    ```
 
+4. **Run several environments side by side (optional):**
+
+   Give each one its own host port. The compose project is named after the
+   port (`archipelago-<port>`), so `docker compose down` with the same
+   `ENV_PORT` stops only that one. All projects share one image; build it
+   once, then start each without `--build`.
+
+   ```bash
+   docker compose build
+   ENV_PORT=8081 docker compose up -d --no-build
+   ENV_PORT=8082 docker compose up -d --no-build
+   ```
+
+   A later `--build` retags `archipelago-environment:local`, so environments
+   started afterwards run the new code. To keep a batch of runs on one build,
+   tag it and set `ENV_IMAGE` (e.g. `ENV_IMAGE=archipelago-environment:<sha>`),
+   always with `--no-build`: building with `ENV_IMAGE` set overwrites that tag.
+   The examples read `ENV_PORT` and skip their build when `ENV_IMAGE` is set.
+   If you set `ENV_URL` instead, its port must match `ENV_PORT`.
+
+   Pitfalls:
+   - Set `ENV_PORT` and `ENV_IMAGE` in the shell, not in `environment/.env`.
+     Compose reads that file for its own variables too, so a port there
+     applies to every environment, and the examples don't see it.
+   - Leave `COMPOSE_PROJECT_NAME` unset (or pass `-p archipelago-<port>`). It
+     overrides the per-port project name, so every environment would share
+     one project and `down` in one would stop them all.
+
 ## Configuration
 
 The application is configured via environment variables. You can set these in a `.env` file or pass them to the Docker container at runtime.

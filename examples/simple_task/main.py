@@ -34,7 +34,9 @@ ENVIRONMENT_DIR = Path(
 AGENTS_DIR = Path(os.environ.get("AGENTS_DIR", ARCHIPELAGO_DIR / "agents"))
 GRADING_DIR = Path(os.environ.get("GRADING_DIR", ARCHIPELAGO_DIR / "grading"))
 
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:8080")
+ENV_URL = os.environ.get(
+    "ENV_URL", f"http://localhost:{os.environ.get('ENV_PORT') or '8080'}"
+)
 
 
 def log(msg: str):
@@ -77,7 +79,9 @@ def start_environment():
 
     log("Building and starting fresh environment container...")
     result = subprocess.run(
-        ["docker", "compose", "up", "-d", "--build"],
+        # A pinned ENV_IMAGE must not be rebuilt, or the build overwrites its tag
+        ["docker", "compose", "up", "-d"]
+        + ([] if os.environ.get("ENV_IMAGE") else ["--build"]),
         cwd=ENVIRONMENT_DIR,
     )
     if result.returncode != 0:
