@@ -34,8 +34,10 @@ what we removed.
   from `ENV_PORT` unless `ENV_URL` is set, and skip `--build` when
   `ENV_IMAGE` is set.
   - Upgrading: a container from the old layout (project `environment`,
-    container `archipelago-environment`) keeps holding port 8080 and the new
-    one fails with "port is already allocated". Remove it and its old image
+    container `archipelago-environment`) keeps holding port 8080, and the new
+    one fails with "port is already allocated". The examples remove that
+    container themselves when they run on port 8080, as their `down` used to.
+    For manual `docker compose up`, remove it and its old image
     (`environment-environment`) once with
     `docker compose -p environment down --rmi local`.
 
