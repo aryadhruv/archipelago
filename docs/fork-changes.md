@@ -26,11 +26,18 @@ what we removed.
   window is unknown. This is always the case for `openrouter/` models, so with
   `false`, set `context_window_tokens` in the agent config for every model.
 - **Parallel environments.** The environment's compose file no longer fixes the
-  container name, and the host port comes from `ENV_PORT` (default `8080`).
-  Each worker sets its own `COMPOSE_PROJECT_NAME` and `ENV_PORT`; all share
-  the `archipelago-environment:local` image. The default project is
-  `archipelago`, so the container is now `archipelago-environment-1`. The
-  examples build `ENV_URL` from `ENV_PORT` unless `ENV_URL` is set.
+  container name. The host port comes from `ENV_PORT` (default `8080`) and
+  the compose project is named after it (`archipelago-<port>`), so each port
+  is its own environment. All share the image `archipelago-environment:local`,
+  overridable with `ENV_IMAGE`. Containers use Docker's default bridge
+  network rather than one network per project. The examples build `ENV_URL`
+  from `ENV_PORT` unless `ENV_URL` is set, and skip `--build` when
+  `ENV_IMAGE` is set.
+  - Upgrading: a container from the old layout (project `environment`,
+    container `archipelago-environment`) keeps holding port 8080 and the new
+    one fails with "port is already allocated". Remove it and its old image
+    (`environment-environment`) once with
+    `docker compose -p environment down --rmi local`.
 
 ## Fixed
 

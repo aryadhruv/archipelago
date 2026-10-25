@@ -21,7 +21,7 @@ export EXAMPLE_DIR="$SCRIPT_DIR"
 export ENVIRONMENT_DIR="$ARCHIPELAGO_DIR/environment"
 export AGENTS_DIR="$ARCHIPELAGO_DIR/agents"
 export GRADING_DIR="$ARCHIPELAGO_DIR/grading"
-# Set COMPOSE_PROJECT_NAME and ENV_PORT to run several examples side by side
+# Give each concurrent run its own ENV_PORT (also selects its compose project)
 export ENV_URL="${ENV_URL:-http://localhost:${ENV_PORT:-8080}}"
 
 echo "============================================================"
