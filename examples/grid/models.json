@@ -1,0 +1,14 @@
+[
+  {
+    "id": "nemotron-super-vl-free",
+    "label": "Nemotron 3.5 Super VL (free)",
+    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free",
+    "context_window_tokens": 1000000
+  },
+  {
+    "id": "haiku-5.5",
+    "label": "Haiku 5.5",
+    "model": "openrouter/anthropic/claude-haiku-5.5",
+    "context_window_tokens": 1000000
+  }
+]

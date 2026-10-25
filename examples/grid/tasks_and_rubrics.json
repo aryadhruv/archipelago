@@ -1,0 +1,14 @@
+[
+  {
+    "task_id": "find_gorilla",
+    "task_name": "Find the gorilla image",
+    "world_id": "animals",
+    "prompt": "There are several subdirectories in this filesystem, each containing an image of an animal. Read each image file to view its contents, find the gorilla, and tell me its full path.",
+    "rubric": [
+      {
+        "verifier_id": "ver_001",
+        "criteria": "The agent found and reported the correct path to the gorilla image: /animals/xk92m/qz7fw.png"
+      }
+    ]
+  }
+]

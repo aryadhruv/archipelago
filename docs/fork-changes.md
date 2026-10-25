@@ -41,6 +41,16 @@ what we removed.
     (`environment-environment`) once with
     `docker compose -p environment down --rmi local`.
 
+- **Grid runner** (`grid/`, new). `python -m grid validate|run|status
+  <grid.json>` runs every task × model × repeat through the environment, agent
+  and grading runners, several at once, from inputs in the HF apex-agents
+  layout. It builds one image per grid tagged with the commit, gives each run
+  its own port and compose project and each attempt its own output dir, reruns
+  infra errors (not model failures), and keeps state in SQLite so a stopped
+  grid resumes. Unlike `examples/hugging_face_task`, it grades runs whose agent
+  `failed` (they count), and grades against a snapshot taken after the world
+  and the task overlay are loaded. See `grid/README.md`.
+
 ## Fixed
 
 - **`read_image_file`** detects PNG, JPEG, GIF and WebP from the file's bytes, not
