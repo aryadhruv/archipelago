@@ -10,6 +10,7 @@ uv sync --locked
 uv run --locked python -m grid validate ../examples/grid/grid.json
 uv run --locked python -m grid run ../examples/grid/grid.json
 uv run --locked python -m grid status ../examples/grid/grid.json
+uv run --locked python -m grid serve ../examples/grid/grid.json   # dashboard API on 127.0.0.1:7000
 ```
 
 `agents/.env` and `grading/.env` need the provider keys for the models and the
@@ -65,8 +66,9 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `system_prompt` | `defaults/system_prompt.md` | The prompt from the examples |
 | `mcp_config` | `defaults/mcp_config.json` | All nine servers, each with its own venv Python over stdio |
 | `eval_configs`, `scoring_config` | `defaults/` | `output_llm` criteria, plain average |
-| `env_image` | built from the current commit | Pin an existing image |
+| `env_image` | built from the checked-out `environment/` and `mcp_servers/` | Pin an existing image |
 | `output_dir` | `runs` | |
+| `pass_score` | 1.0 | The score a run needs to count as a pass on the leaderboard |
 
 Each rubric criterion becomes one `output_llm` verifier. The first one is the
 primary objective.
@@ -92,9 +94,11 @@ Errors are told from fails like this:
 | Grading not `completed` with a score (a verifier raised or errored, e.g. a judge API or auth failure, after the judge's own 5 retries) | Grading rerun on the same trajectory and snapshots; no score is recorded |
 | `max_attempts` used | `gave_up` |
 
-The image is built once per grid and tagged with the commit
-(`archipelago-environment:<sha>`, or `<sha>-dirty` with uncommitted changes
-under `environment/` or `mcp_servers/`). `manifest.json` records it.
+The image is built once per grid and tagged after the git trees it's built
+from (`archipelago-environment:tree-<hash>` of `environment/` and
+`mcp_servers/`), so commits that don't touch them reuse it. Uncommitted changes
+there give a `-dirty` tag, rebuilt on each `run`. `manifest.json` records the
+image and the commit.
 
 ## Output
 
@@ -111,3 +115,55 @@ under `environment/` or `mcp_servers/`). `manifest.json` records it.
 
 Ctrl-C stops the grid and tears down its environments. `run` again resumes,
 and interrupted runs start a new attempt.
+
+## Dashboard API
+
+`serve` runs the API and the scheduler in one process, bound to 127.0.0.1.
+Start the grid from the UI or with `--start`. Everything under `/api`:
+
+| Method | Path | |
+|---|---|---|
+| GET | `/grid` | Config: worlds, tasks, models, totals, image |
+| GET | `/preflight[?refresh=1]` | The `validate` checks (cached) |
+| POST | `/grid/start`, `/grid/pause`, `/grid/resume`, `/grid/cancel` | Pause lets runs in flight finish; cancel stops them and requeues them |
+| POST, GET | `/smoke` | Start, or check, one run per model on the first task, in its own `<grid_id>-smoke` grid |
+| GET | `/summary` | Counts, tokens, ETA, workers |
+| GET | `/runs[?task=&model=&state=]` | One row per run |
+| GET | `/runs/{id}` | Detail: attempts, per-call usage, final answer, per-criterion grades |
+| GET | `/runs/{id}/events[?after=seq]` | The run's events |
+| POST | `/runs/{id}/retry` | Rerun a finished run with a fresh attempt budget |
+| GET | `/runs/{id}/trajectory`, `/grades`, `/files/{path}` | Raw files of the latest attempt |
+| GET | `/worlds/{id}/files` | The world's files, as paths the agent sees |
+| GET | `/leaderboard` | Per model: mean score ± 95% CI, pass rate, tokens, time, errors, fails, tool use; task × model matrix |
+| GET | `/export.csv`, `/export.json` | Results |
+| GET | `/stream[?run=&kinds=&after=]` | Server-sent events, one JSON event per message |
+
+The stream starts at the newest event unless `after` is given, and a
+reconnect resumes from `Last-Event-ID`. The fixtures in `grid/static/mock/`
+show every response's shape.
+
+Events come from three places, normalized into one shape (`seq, ts, run_id,
+model_id, task_id, kind, server, tool, ref, args_preview, ok, duration_ms,
+tokens, text, state, path`):
+
+- **The agent's log.** `FILE_LOGGING` writes `agent_events.jsonl`, which the
+  grid tails while the agent runs. Kinds: `step` (one model call, with tokens
+  and latency), `tool_call` and `tool_result` (server and tool split from the
+  `{server}_{tool}` name, paired by `ref` and timed), `reasoning`, `response`,
+  `toolbelt`, `compaction`, `final_answer`.
+- **Grading's output.** The judge's start and result lines become
+  `grading_progress`, and the final score becomes `grade`.
+- **The grid itself.** `run_state` on every state change, `infra` for errors
+  and retries, and `grid_state` for the grid as a whole.
+
+Previews are clipped (300 characters for arguments and results, 2,000 for
+text), and image results show as `[image]`. The full content stays in the
+attempt's files.
+
+### Leaderboard rules
+
+Only scored runs count. A failed agent or a wall-clock timeout counts against
+the model. Runs that gave up after `max_attempts` infra or grading errors are
+left out of the score and reported as `gave_up`, and `errors` counts the extra
+attempts, so a flaky provider is visible without lowering the score. A run
+passes at `pass_score`.

@@ -1,6 +1,7 @@
 """Drive one environment container: compose up/down and the sandbox HTTP API."""
 
 import asyncio
+import hashlib
 import os
 import shutil
 import socket
@@ -147,16 +148,38 @@ class Environment:
         return dest
 
 
+# What the image is built from (see environment/Dockerfile's COPY lines).
+IMAGE_SOURCES = ("environment", "mcp_servers")
+
+
+async def _image_sources_dirty() -> bool:
+    _, out = await run_cmd(
+        "git", "status", "--porcelain", "--", *IMAGE_SOURCES, cwd=REPO_DIR
+    )
+    return bool(out.strip())
+
+
 async def git_sha() -> str:
     code, out = await run_cmd("git", "rev-parse", "--short=12", "HEAD", cwd=REPO_DIR)
     if code != 0:
         raise RuntimeError(f"git rev-parse failed: {out}")
-    sha = out.strip()
-    # Uncommitted changes to what goes into the image make the SHA a lie.
+    return out.strip()
+
+
+async def image_tag() -> str:
+    """A tag named after the git trees the image is built from.
+
+    Commits that don't touch them reuse the image. Uncommitted changes there
+    make the tag `-dirty`, which is rebuilt every time.
+    """
     code, out = await run_cmd(
-        "git", "status", "--porcelain", "--", "environment", "mcp_servers", cwd=REPO_DIR
+        "git", "rev-parse", *(f"HEAD:{s}" for s in IMAGE_SOURCES), cwd=REPO_DIR
     )
-    return f"{sha}-dirty" if out.strip() else sha
+    if code != 0:
+        raise RuntimeError(f"git rev-parse failed: {out}")
+    digest = hashlib.sha256(out.encode()).hexdigest()[:12]
+    dirty = "-dirty" if await _image_sources_dirty() else ""
+    return f"{IMAGE_REPO}:tree-{digest}{dirty}"
 
 
 async def image_exists(image: str) -> bool:
@@ -167,10 +190,10 @@ async def image_exists(image: str) -> bool:
 async def ensure_image(image: str | None, rebuild: bool = False) -> str:
     """Return the image every worker runs, building it once if needed.
 
-    Without a configured image, the tag is the git SHA, so a grid's runs all
-    use one build and the manifest says which.
+    Without a configured image, the tag names the source trees (image_tag),
+    so a grid's runs all use one build and the manifest says which.
     """
-    tag = image or f"{IMAGE_REPO}:{await git_sha()}"
+    tag = image or await image_tag()
     if image and not rebuild:
         if not await image_exists(tag):
             raise InfraError(f"Configured env_image {tag} does not exist")

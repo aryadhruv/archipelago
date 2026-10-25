@@ -6,6 +6,7 @@ it stopped and the dashboard can read the same file.
 
 import json
 import sqlite3
+import threading
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -44,6 +45,11 @@ CREATE TABLE IF NOT EXISTS runs (
     score REAL,
     tokens INTEGER,
     steps INTEGER,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    tool_calls INTEGER,
+    agent_floor INTEGER NOT NULL DEFAULT 0,
+    grading_floor INTEGER NOT NULL DEFAULT 0,
     duration_s REAL,
     not_before REAL NOT NULL DEFAULT 0,
     started_at REAL,
@@ -90,10 +96,34 @@ class Run:
     score: float | None
     tokens: int | None
     steps: int | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    tool_calls: int | None
+    # Attempts made before the last manual retry; max_attempts counts from here.
+    agent_floor: int
+    grading_floor: int
     duration_s: float | None
     not_before: float
     started_at: float | None
     finished_at: float | None
+
+
+@dataclass
+class _Result:
+    """A statement's rows and counters, read while the lock was held."""
+
+    rows: list[sqlite3.Row]
+    rowcount: int
+    lastrowid: int | None
+
+    def fetchall(self) -> list[sqlite3.Row]:
+        return self.rows
+
+    def fetchone(self) -> sqlite3.Row | None:
+        return self.rows[0] if self.rows else None
+
+    def __iter__(self):
+        return iter(self.rows)
 
 
 def run_id_for(task_id: str, model_id: str, repeat: int) -> str:
@@ -104,27 +134,48 @@ class Store:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
-        self._db = sqlite3.connect(path, isolation_level=None)
+        # The API serves from worker threads and the scheduler from the event
+        # loop; one connection, one statement at a time.
+        self._lock = threading.RLock()
+        self._db = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
-        self._db.execute("PRAGMA journal_mode=WAL")
-        self._db.executescript(_SCHEMA)
+        self._exec("PRAGMA journal_mode=WAL")
+        with self._lock:
+            self._db.executescript(_SCHEMA)
+        self._migrate()
+
+    def _exec(self, sql: str, params: tuple | list = ()) -> _Result:
+        with self._lock:
+            cursor = self._db.execute(sql, params)
+            return _Result(cursor.fetchall(), cursor.rowcount, cursor.lastrowid)
+
+    def _migrate(self) -> None:
+        """Add columns that newer versions of the runs table have."""
+        have = {r["name"] for r in self._exec("PRAGMA table_info(runs)")}
+        for column in ("prompt_tokens", "completion_tokens", "tool_calls"):
+            if column not in have:
+                self._exec(f"ALTER TABLE runs ADD COLUMN {column} INTEGER")
+        for column in ("agent_floor", "grading_floor"):
+            if column not in have:
+                self._exec(
+                    f"ALTER TABLE runs ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
+                )
 
     def close(self) -> None:
-        self._db.close()
+        with self._lock:
+            self._db.close()
 
     # meta
 
     def set_meta(self, key: str, value: Any) -> None:
-        self._db.execute(
+        self._exec(
             "INSERT INTO meta (key, value) VALUES (?, ?) "
             "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
             (key, json.dumps(value)),
         )
 
     def get_meta(self, key: str) -> Any:
-        row = self._db.execute(
-            "SELECT value FROM meta WHERE key = ?", (key,)
-        ).fetchone()
+        row = self._exec("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
         return json.loads(row["value"]) if row else None
 
     # runs
@@ -133,7 +184,7 @@ class Store:
         """Insert (task_id, model_id, repeat) rows that aren't there yet."""
         added = 0
         for position, (task_id, model_id, repeat) in enumerate(rows):
-            cursor = self._db.execute(
+            cursor = self._exec(
                 "INSERT OR IGNORE INTO runs (run_id, position, task_id, model_id, repeat) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (
@@ -150,10 +201,10 @@ class Store:
     def reset_interrupted(self) -> list[str]:
         """Put runs a previous process left mid-flight back in the queue."""
         marks = ",".join("?" * len(ACTIVE_STATES))
-        rows = self._db.execute(
+        rows = self._exec(
             f"SELECT run_id FROM runs WHERE state IN ({marks})", ACTIVE_STATES
         ).fetchall()
-        self._db.execute(
+        self._exec(
             f"UPDATE runs SET state = 'retry', port = NULL, not_before = 0 "
             f"WHERE state IN ({marks})",
             ACTIVE_STATES,
@@ -162,19 +213,17 @@ class Store:
 
     def runs(self, states: Iterable[str] | None = None) -> list[Run]:
         if states is None:
-            rows = self._db.execute("SELECT * FROM runs ORDER BY position").fetchall()
+            rows = self._exec("SELECT * FROM runs ORDER BY position").fetchall()
         else:
             states = tuple(states)
             marks = ",".join("?" * len(states))
-            rows = self._db.execute(
+            rows = self._exec(
                 f"SELECT * FROM runs WHERE state IN ({marks}) ORDER BY position", states
             ).fetchall()
         return [Run(**dict(r)) for r in rows]
 
     def run(self, run_id: str) -> Run:
-        row = self._db.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        row = self._exec("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         if row is None:
             raise KeyError(run_id)
         return Run(**dict(row))
@@ -183,13 +232,13 @@ class Store:
         if not fields:
             return
         assignments = ", ".join(f"{k} = ?" for k in fields)
-        self._db.execute(
+        self._exec(
             f"UPDATE runs SET {assignments} WHERE run_id = ?",
             (*fields.values(), run_id),
         )
 
     def counts(self) -> dict[str, int]:
-        rows = self._db.execute("SELECT state, COUNT(*) AS n FROM runs GROUP BY state")
+        rows = self._exec("SELECT state, COUNT(*) AS n FROM runs GROUP BY state")
         return {r["state"]: r["n"] for r in rows}
 
     # attempts
@@ -197,7 +246,7 @@ class Store:
     def start_attempt(
         self, run_id: str, kind: str, number: int, directory: Path
     ) -> int:
-        cursor = self._db.execute(
+        cursor = self._exec(
             "INSERT INTO attempts (run_id, kind, number, dir, started_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (run_id, kind, number, str(directory), time.time()),
@@ -205,13 +254,13 @@ class Store:
         return int(cursor.lastrowid or 0)
 
     def finish_attempt(self, attempt_id: int, outcome: str, reason: str) -> None:
-        self._db.execute(
+        self._exec(
             "UPDATE attempts SET outcome = ?, reason = ?, finished_at = ? WHERE id = ?",
             (outcome, reason, time.time(), attempt_id),
         )
 
     def attempts(self, run_id: str) -> list[dict[str, Any]]:
-        rows = self._db.execute(
+        rows = self._exec(
             "SELECT * FROM attempts WHERE run_id = ? ORDER BY id", (run_id,)
         ).fetchall()
         return [dict(r) for r in rows]
@@ -219,22 +268,35 @@ class Store:
     # events
 
     def add_event(self, kind: str, run_id: str | None = None, **data: Any) -> int:
-        cursor = self._db.execute(
+        cursor = self._exec(
             "INSERT INTO events (ts, run_id, kind, data) VALUES (?, ?, ?, ?)",
             (time.time(), run_id, kind, json.dumps(data, default=str)),
         )
         return int(cursor.lastrowid or 0)
 
+    def max_seq(self) -> int:
+        row = self._exec("SELECT MAX(seq) AS seq FROM events").fetchone()
+        return int(row["seq"] or 0)
+
+    def tool_call_counts(self) -> list[tuple[str, str | None, int]]:
+        """(model_id, server, calls) over every tool_call event."""
+        rows = self._exec(
+            "SELECT json_extract(data, '$.model_id') AS model_id, "
+            "json_extract(data, '$.server') AS server, COUNT(*) AS n "
+            "FROM events WHERE kind = 'tool_call' GROUP BY 1, 2"
+        )
+        return [(r["model_id"], r["server"], r["n"]) for r in rows]
+
     def events(
         self, run_id: str | None = None, after: int = 0, limit: int = 1000
     ) -> list[dict[str, Any]]:
         if run_id is None:
-            rows = self._db.execute(
+            rows = self._exec(
                 "SELECT * FROM events WHERE seq > ? ORDER BY seq LIMIT ?",
                 (after, limit),
             ).fetchall()
         else:
-            rows = self._db.execute(
+            rows = self._exec(
                 "SELECT * FROM events WHERE run_id = ? AND seq > ? ORDER BY seq LIMIT ?",
                 (run_id, after, limit),
             ).fetchall()
