@@ -7,13 +7,7 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Build
 
-1. **Dashboard follow-ups.**
-   - More than 8 models reuse the 8 palette hues. Every view also shows the
-     model's name or initials, but colour alone no longer tells them apart;
-     add a second encoding (an outline or pattern) for models 9 and up.
-   - Check layouts under 1280px wide (the page scrolls sideways a little).
-   - After Stop, the indicator says "Not started"; it could say "Stopped".
-2. **Sub-agents.** `agents/runner/utils/subagent.py::spawn_subagent()` exists,
+1. **Sub-agents.** `agents/runner/utils/subagent.py::spawn_subagent()` exists,
    but nothing calls it and no harness exposes it as a tool. To allow
    delegation, add a `delegate(task, context)` tool to `react_toolbelt_agent`.
    Then decide whether every model gets it, because it must be the same for
@@ -25,7 +19,7 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      through event triggers, such as a tool call being seen or time elapsing.
      The model being tested can't start them. Tool calls carry an `actor_id`
      (`target_agent` / VCA id / `coordinator`).
-3. **App-state verifiers without servers.** `grading/` has verifiers for
+2. **App-state verifiers without servers.** `grading/` has verifiers for
    third-party app state (QuickBooks, Xero, Workday, SAP, BambooHR,
    Greenhouse, TaxJar), but the repo has no MCP servers for those apps, so
    they can't run as shipped. Either remove them or pair each with a server.

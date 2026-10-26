@@ -91,8 +91,19 @@ const DARK_STEP = {
 const SLOTS = Object.keys(DARK_STEP);
 let MODELS = {};
 export function registerModels(models) {
-  // Past eight models, hues repeat: labels and initials carry identity there.
-  MODELS = Object.fromEntries(models.map((m, i) => [m.id, { ...m, color: m.color || SLOTS[i % SLOTS.length] }]));
+  // Past eight models, hues repeat. The second pass is drawn hollow or
+  // striped (modelAlt), and labels and initials carry identity too.
+  MODELS = Object.fromEntries(models.map((m, i) => [m.id, { ...m, color: m.color || SLOTS[i % SLOTS.length], alt: i >= SLOTS.length }]));
+}
+/** True for models 9 and up, which share a hue with an earlier model. */
+export const modelAlt = (id) => Boolean(MODELS[id] && MODELS[id].alt);
+/** CSS background for a model's swatch: solid, or striped on the second pass. */
+export function modelFill(id) {
+  const c = modelColor(id);
+  return modelAlt(id) ? `repeating-linear-gradient(135deg, ${c} 0 2px, transparent 2px 4px)` : c;
+}
+export function modelSwatch(id) {
+  return h('span', { class: 'swatch' + (modelAlt(id) ? ' alt' : ''), style: { background: modelFill(id), color: modelColor(id) }, dataset: { model: id } });
 }
 export const modelById = (id) => MODELS[id];
 export const modelLabel = (id) => (MODELS[id] ? MODELS[id].label : id);

@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { store, worldById } from '../store.js';
 import {
   h, icon, fmtBytes, fmtInt, fmtTokens, modelColor, modelInk, serverLabel, tip, clear, fmtDateTime,
-  fmtDuration, fmtScore, modelLabel, modelInitials,
+  fmtDuration, fmtScore, modelLabel, modelInitials, modelSwatch,
 } from '../util.js';
 
 export function render(root) {
@@ -49,7 +49,7 @@ export function render(root) {
           r.ok ? 'Every model finished' : 'Some models did not finish'), ` ${taskName}`),
         r.error ? h('div', null, r.error) : null,
         h('ul', { class: 'smoke-runs' }, r.runs.map((run) => h('li', null,
-          h('span', { class: 'swatch', style: { background: modelColor(run.model_id) } }),
+          modelSwatch(run.model_id),
           ` ${modelLabel(run.model_id)}: `,
           run.state === 'scored'
             ? `score ${fmtScore(run.score)}${run.duration_s ? ' in ' + fmtDuration(run.duration_s) : ''}`

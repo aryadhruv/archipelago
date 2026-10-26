@@ -71,12 +71,14 @@ paintToggle();
 
 // ---------- live indicator ----------
 const ind = document.getElementById('live-ind');
-const LABEL = { running: 'Live', paused: 'Paused', idle: 'Not started', done: 'Finished' };
+const LABEL = { running: 'Live', paused: 'Paused', idle: 'Not started', stopped: 'Stopped', done: 'Finished' };
 function paintIndicator(summary) {
   if (!summary) return;
-  ind.dataset.state = summary.state;
-  ind.querySelector('.live-label').textContent = LABEL[summary.state] || summary.state;
-  ind.title = `Grid state: ${summary.state}`;
+  // An idle grid that has started runs before was stopped (or failed).
+  const state = summary.state === 'idle' && summary.started_at ? 'stopped' : summary.state;
+  ind.dataset.state = state;
+  ind.querySelector('.live-label').textContent = LABEL[state] || state;
+  ind.title = summary.error ? `Grid stopped: ${summary.error}` : `Grid state: ${state}`;
 }
 
 // ---------- boot ----------

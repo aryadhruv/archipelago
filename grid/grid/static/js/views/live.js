@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
   h, icon, clear, fmtInt, fmtTokens, fmtDuration, fmtScore, fmtClock, modelColor, modelLabel, scoreColor,
-  scoreRampStops, stateGroup, stateLabel, STATE_ICON, tip, tipBody, serverLabel, shortTool, emptyState,
+  scoreRampStops, stateGroup, stateLabel, STATE_ICON, tip, tipBody, serverLabel, shortTool, emptyState, modelSwatch, modelFill,
 } from '../util.js';
 
 export function render(root) {
@@ -19,10 +19,12 @@ export function render(root) {
     stopBtn.disabled = true;
     try { await api.cancelGrid(); } finally { stopBtn.disabled = false; }
   });
+  const bannerTitle = h('b', null, 'The grid is not running. ');
+  const bannerBtn = h('button', { class: 'btn btn-primary', type: 'button', onclick: async () => { await api.startGrid(); } });
   const banner = h('div', { class: 'banner', hidden: true },
-    icon('play', 18), h('div', { class: 'grow' }, h('b', null, 'The grid is not running. '),
+    icon('play', 18), h('div', { class: 'grow' }, bannerTitle,
       h('span', { class: 'muted' }, 'The board shows the latest snapshot. Start the grid to stream live progress.')),
-    h('button', { class: 'btn btn-primary', type: 'button', onclick: async () => { await api.startGrid(); } }, icon('play', 14), 'Start grid'));
+    bannerBtn);
   pauseBtn.addEventListener('click', async () => {
     if (store.summary.state === 'paused') await api.resumeGrid();
     else await api.pauseGrid();
@@ -56,6 +58,9 @@ export function render(root) {
     const sm = store.summary;
     if (!sm) return;
     banner.hidden = !(sm.state === 'idle');
+    // After Stop, starting again picks up the runs that are left.
+    bannerTitle.textContent = sm.started_at ? 'The grid is stopped. ' : 'The grid is not running. ';
+    clear(bannerBtn).append(icon('play', 14), sm.started_at ? 'Resume grid' : 'Start grid');
     pauseBtn.hidden = sm.state === 'idle' || sm.state === 'done';
     stopBtn.hidden = pauseBtn.hidden;
     clear(pauseBtn).append(icon(sm.state === 'paused' ? 'play' : 'pause', 14), sm.state === 'paused' ? 'Resume' : 'Pause');
@@ -126,7 +131,7 @@ function paintWorkers(root, sm) {
     const r = w.run_id ? store.runIndex.get(w.run_id) : null;
     const node = h(r ? 'a' : 'div', { class: 'worker', href: r ? `#/run/${r.run_id}` : undefined },
       h('div', { class: 'port' }, h('span', { class: 'health ' + (w.health || 'ok'), 'aria-label': `health ${w.health}` }), `:${w.port}`),
-      r ? h('div', { class: 'chip' }, h('span', { class: 'swatch', style: { background: modelColor(r.model_id) } }), modelLabel(r.model_id), h('span', { class: 'muted mono' }, r.run_id))
+      r ? h('div', { class: 'chip' }, modelSwatch(r.model_id), modelLabel(r.model_id), h('span', { class: 'muted mono' }, r.run_id))
         : h('div', { class: 'muted' }, 'idle'),
       h('div', { class: 'st' }, r ? `${stateLabel(r.state)} · ${taskById(r.task_id).task_name}` : 'waiting for work'));
     tip(node, () => tipBody(`Port ${w.port}`, [['Health', w.health], ['Run', w.run_id || '–'], ['State', w.state || 'idle']]));
@@ -156,7 +161,7 @@ function tickerRow(e, fresh) {
   }
   return h('li', { class: fresh ? 'fresh' : '' },
     h('span', { class: 't' }, fmtClock(e.ts)),
-    h('span', { class: 'bar', style: { background: e.model_id ? modelColor(e.model_id) : 'var(--text-muted)' } }),
+    h('span', { class: 'bar', style: { background: e.model_id ? modelFill(e.model_id) : 'var(--text-muted)' } }),
     h('div', { class: 'body' },
       h('div', { class: 'line1' },
         e.model_id ? h('b', null, modelLabel(e.model_id)) : h('b', null, e.kind === 'grid_state' ? 'Grid' : 'Infra'),
@@ -167,12 +172,12 @@ function tickerRow(e, fresh) {
 
 // ---------- heatmap ----------
 function buildHeatmap(g) {
-  const cols = `minmax(180px, 220px) repeat(${g.models.length}, minmax(96px, 1fr))`;
+  const cols = `minmax(140px, 220px) repeat(${g.models.length}, minmax(64px, 1fr))`;
   const node = h('div', { class: 'heat', style: { gridTemplateColumns: cols }, role: 'grid', 'aria-label': 'Task by model run status' });
   const segs = new Map(); // `${task}|${model}|${repeat}` -> element
   node.append(h('div'));
   for (const m of g.models) {
-    const head = h('div', { class: 'heat-head' }, h('span', { class: 'swatch', style: { background: modelColor(m.id) } }), m.label);
+    const head = h('div', { class: 'heat-head' }, modelSwatch(m.id), m.label);
     head.dataset.model = m.id;
     node.append(head);
   }
@@ -242,7 +247,7 @@ function buildHeatmap(g) {
     // header swatches follow the theme
     for (const head of node.querySelectorAll('.heat-head')) {
       const sw = head.querySelector('.swatch');
-      if (sw) sw.style.background = modelColor(head.dataset.model);
+      if (sw) sw.replaceWith(modelSwatch(head.dataset.model));
     }
     legendRamp.style.background = `linear-gradient(90deg, ${scoreRampStops().join(',')})`;
   }

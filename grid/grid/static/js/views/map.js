@@ -7,7 +7,7 @@ import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
   h, s, icon, clear, ICONS, SERVERS, modelColor, modelInk, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
-  tipBody, pathFromArgs, reducedMotion, fmtInt, fmtClock, stateLabel, stateGroup,
+  tipBody, pathFromArgs, reducedMotion, fmtInt, fmtClock, stateLabel, stateGroup, modelFill, modelAlt,
 } from '../util.js';
 
 const W = 1200, H = 680;
@@ -98,15 +98,15 @@ export function render(root, route) {
     const p = agentPos.get(m.id);
     const grp = s('g', { transform: `translate(${p.x},${p.y})`, style: 'cursor:pointer' });
     const ring = s('circle', { class: 'busy-ring', r: 33, stroke: modelColor(m.id), 'stroke-opacity': 0 });
-    const bg = s('circle', { class: 'agent-bg', r: 26, fill: modelColor(m.id) });
+    const bg = s('circle', { class: 'agent-bg' + (modelAlt(m.id) ? ' alt' : ''), r: 26 });
     const ic = s('g', { class: 'agent-icon', transform: 'translate(-12,-12)' });
     for (const d of ICONS.agent) ic.append(s('path', { d }));
-    if (modelInk(m.id) !== '#ffffff') ic.setAttribute('style', 'stroke:' + modelInk(m.id));
+    paintAgent(m.id, bg, ic);
     const label = s('text', { class: 'node-label', x: -42, y: -2, 'text-anchor': 'end' }, m.label);
     const sub = s('text', { class: 'node-sub', x: -42, y: 14, 'text-anchor': 'end' }, '');
     grp.append(ring, bg, ic, label, sub);
     gNodes.append(grp);
-    const ag = { grp, ring, bg, sub, calls: 0 };
+    const ag = { grp, ring, bg, ic, sub, calls: 0 };
     agents.set(m.id, ag);
     grp.addEventListener('click', () => setModel(st.model === m.id ? 'all' : m.id));
     grp.addEventListener('mouseenter', (ev) => showTip(ev, agentTip(m, ag)));
@@ -557,7 +557,7 @@ export function render(root, route) {
   }
   function agentTip(m, ag) {
     const running = store.runs.filter((r) => r.model_id === m.id && stateGroup(r.state) === 'running');
-    return tipBody(m.label, [['Model', m.model], ['Running', String(running.length)], ['Calls seen', fmtInt(ag.calls)], ['Click', 'filter to this model']], modelColor(m.id));
+    return tipBody(m.label, [['Model', m.model], ['Running', String(running.length)], ['Calls seen', fmtInt(ag.calls)], ['Click', 'filter to this model']], modelFill(m.id));
   }
 
   // ---------- wiring ----------
@@ -570,7 +570,7 @@ export function render(root, route) {
     if (st.mode === 'focus' && runSel.options.length <= 1) fillRunSelect();
   }));
   const onTheme = () => {
-    for (const [id, ag] of agents) { ag.bg.setAttribute('fill', modelColor(id)); ag.ring.setAttribute('stroke', modelColor(id)); }
+    for (const [id, ag] of agents) { paintAgent(id, ag.bg, ag.ic); ag.ring.setAttribute('stroke', modelColor(id)); }
     paintEdges();
   };
   window.addEventListener('themechange', onTheme);
@@ -584,4 +584,17 @@ export function render(root, route) {
     window.removeEventListener('themechange', onTheme);
     hideTip();
   };
+}
+
+/** Fill an agent node: solid in the model's colour, or a hollow ring for models 9 and up. */
+function paintAgent(id, bg, ic) {
+  const c = modelColor(id);
+  if (modelAlt(id)) {
+    bg.setAttribute('fill', 'var(--surface-1)');
+    bg.style.stroke = c; // the stylesheet's ring colour would win over an attribute
+    ic.setAttribute('style', 'stroke:' + c);
+  } else {
+    bg.setAttribute('fill', c);
+    ic.setAttribute('style', modelInk(id) !== '#ffffff' ? 'stroke:' + modelInk(id) : '');
+  }
 }
