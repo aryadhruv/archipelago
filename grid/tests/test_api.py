@@ -80,7 +80,11 @@ def test_leaderboard_and_export(setup):
     assert len(csv) == 5
 
 
-def test_events_and_manual_retry(setup):
+def test_events_and_manual_retry(setup, monkeypatch):
+    from grid.server import GridControl
+
+    started = []
+    monkeypatch.setattr(GridControl, "start", lambda self: started.append(True))
     _, store, client = setup
     run_id = run_id_for("t1", "b", 1)
     events = client.get(f"/api/runs/{run_id}/events").json()
@@ -93,6 +97,8 @@ def test_events_and_manual_retry(setup):
     assert client.post(f"/api/runs/{done}/retry").json()["state"] == "queued"
     run = store.run(done)
     assert run.agent_floor == 1 and run.resume_from == "agent"
+    # An idle grid starts so the retried run gets a worker.
+    assert started == [True]
 
 
 def test_world_files_and_smoke_status(setup):
@@ -104,3 +110,29 @@ def test_world_files_and_smoke_status(setup):
     smoke = client.get("/api/smoke").json()
     assert smoke["state"] == "idle" and smoke["ok"] is None
     assert smoke["task_id"] == "t1"
+
+
+def test_final_answer_from_the_tool_message():
+    from grid.views import final_answer
+
+    trajectory = {
+        "final_answer": None,
+        "messages": [
+            {"role": "assistant", "content": "thinking"},
+            {
+                "role": "tool",
+                "name": "final_answer",
+                "content": [{"type": "text", "text": "It's at /a.png"}],
+            },
+        ],
+    }
+    assert final_answer(trajectory) == "It's at /a.png"
+    assert final_answer({"final_answer": "Direct."}) == "Direct."
+    assert final_answer(None) is None
+
+
+def test_ui_is_served_with_revalidation(setup):
+    _, _, client = setup
+    page = client.get("/")
+    assert page.status_code == 200 and "Archipelago" in page.text
+    assert client.get("/css/app.css").headers["cache-control"] == "no-cache"

@@ -10,7 +10,7 @@ uv sync --locked
 uv run --locked python -m grid validate ../examples/grid/grid.json
 uv run --locked python -m grid run ../examples/grid/grid.json
 uv run --locked python -m grid status ../examples/grid/grid.json
-uv run --locked python -m grid serve ../examples/grid/grid.json   # dashboard API on 127.0.0.1:7000
+uv run --locked python -m grid serve ../examples/grid/grid.json   # dashboard API on 127.0.0.1:7070 (not 7000: macOS AirPlay listens there)
 ```
 
 `agents/.env` and `grading/.env` need the provider keys for the models and the
@@ -116,10 +116,22 @@ image and the commit.
 Ctrl-C stops the grid and tears down its environments. `run` again resumes,
 and interrupted runs start a new attempt.
 
-## Dashboard API
+## Dashboard
 
-`serve` runs the API and the scheduler in one process, bound to 127.0.0.1.
-Start the grid from the UI or with `--start`. Everything under `/api`:
+`serve` runs the dashboard, its API and the scheduler in one process, bound to
+127.0.0.1. Open `http://127.0.0.1:7070/` and start the grid from Setup (or
+pass `--start`). The screens: Setup (the grid, preflight, smoke test), Mission
+Control (progress, the task × model board, activity, workers, pause and stop),
+Live Map (tool calls as they happen; focus on one run with its world's files;
+replay a finished run), run detail, Leaderboard and Infra. The UI is plain
+HTML, CSS and JavaScript in `grid/static/`; see its README.
+
+On a remote machine, forward the port (`ssh -L 7070:127.0.0.1:7070 host`)
+rather than binding to a public address: the API has no authentication.
+
+### API
+
+Everything under `/api`:
 
 | Method | Path | |
 |---|---|---|
@@ -131,15 +143,15 @@ Start the grid from the UI or with `--start`. Everything under `/api`:
 | GET | `/runs[?task=&model=&state=]` | One row per run |
 | GET | `/runs/{id}` | Detail: attempts, per-call usage, final answer, per-criterion grades |
 | GET | `/runs/{id}/events[?after=seq]` | The run's events |
-| POST | `/runs/{id}/retry` | Rerun a finished run with a fresh attempt budget |
+| POST | `/runs/{id}/retry` | Rerun a finished run with a fresh attempt budget (starts the grid if it's idle) |
 | GET | `/runs/{id}/trajectory`, `/grades`, `/files/{path}` | Raw files of the latest attempt |
 | GET | `/worlds/{id}/files` | The world's files, as paths the agent sees |
 | GET | `/leaderboard` | Per model: mean score ± 95% CI, pass rate, tokens, time, errors, fails, tool use; task × model matrix |
 | GET | `/export.csv`, `/export.json` | Results |
 | GET | `/stream[?run=&kinds=&after=]` | Server-sent events, one JSON event per message |
 
-The stream starts at the newest event unless `after` is given, and a
-reconnect resumes from `Last-Event-ID`. The fixtures in `grid/static/mock/`
+A new stream starts with the latest 200 events unless `after` is given, and
+a reconnect resumes from `Last-Event-ID`. The fixtures in `grid/static/mock/`
 show every response's shape.
 
 Events come from three places, normalized into one shape (`seq, ts, run_id,

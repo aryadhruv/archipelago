@@ -13,6 +13,18 @@ MOCK = Path(__file__).parents[1] / "grid" / "static" / "mock"
 
 
 def _missing(expected, actual, path="") -> list[str]:
+    """Keys in expected that actual lacks, and values of a different JSON type."""
+    if expected is not None and actual is not None:
+        number = (int, float)
+        same = (
+            isinstance(expected, number) and isinstance(actual, number)
+            if isinstance(expected, number) and not isinstance(expected, bool)
+            else type(expected) is type(actual)
+        )
+        if not same:
+            return [
+                f"{path}: {type(actual).__name__}, expected {type(expected).__name__}"
+            ]
     if isinstance(expected, dict):
         if not isinstance(actual, dict):
             return [f"{path or '.'}: expected an object"]

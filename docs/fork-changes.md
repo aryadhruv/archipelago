@@ -56,8 +56,9 @@ what we removed.
   `completion_tokens` and `latency_ms`, so a live view can count tokens while
   the run is going. `trajectory.json`'s `usage.call_log` has the same numbers
   at the end.
-- **Dashboard API** (`grid serve`). REST and server-sent events over a grid's
-  `grid.db`, with start, pause, cancel, smoke test and retry. See
+- **Dashboard** (`grid serve`). A plain HTML/CSS/JavaScript UI and the API
+  behind it: REST and server-sent events over a grid's `grid.db`, with start,
+  pause, stop, smoke test and retry. Served at `http://127.0.0.1:7070/`. See
   `grid/README.md`.
 
 ## Fixed

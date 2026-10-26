@@ -110,34 +110,40 @@ export class MockStream {
   runsSnapshot() { return structuredClone(this.runs); }
   eventsFor(id) { return structuredClone(this.runEvents.get(id) || []); }
 
+  /** The same rules as the API's leaderboard (grid/grid/views.py). */
   leaderboard() {
     const base = this.leaderboardBase;
+    const passScore = base.pass_score ?? 1.0;
     const models = this.grid.models.map((m) => {
-      const done = this.runs.filter((r) => r.model_id === m.id && (r.state === 'scored' || r.state === 'gave_up'));
-      const sc = done.map((r) => (r.score === null ? 0 : r.score));
+      const mine = this.runs.filter((r) => r.model_id === m.id);
+      // Only scored runs count; gave-up runs (infra) are reported, not scored.
+      const done = mine.filter((r) => r.state === 'scored' && r.score !== null);
+      const sc = done.map((r) => r.score);
       const n = sc.length;
-      const mean = n ? sc.reduce((a, b) => a + b, 0) / n : 0;
+      const mean = n ? sc.reduce((a, b) => a + b, 0) / n : null;
       const sd = n > 1 ? Math.sqrt(sc.reduce((a, x) => a + (x - mean) ** 2, 0) / (n - 1)) : 0;
       const prof = { ...((base.models.find((x) => x.model_id === m.id) || {}).tool_profile || {}) };
       for (const [srv, c] of Object.entries(this.liveToolCounts[m.id] || {})) prof[srv] = (prof[srv] || 0) + c;
       return {
-        model_id: m.id, mean_score: +mean.toFixed(3), ci95: n > 1 ? +(1.96 * sd / Math.sqrt(n)).toFixed(3) : null,
-        pass_rate: n ? +(sc.filter((x) => x >= 0.8).length / n).toFixed(3) : 0, runs: n,
-        avg_tokens: n ? Math.round(done.reduce((a, r) => a + r.tokens, 0) / n) : 0,
-        avg_duration_s: n ? Math.round(done.reduce((a, r) => a + r.duration_s, 0) / n) : 0,
-        errors: this.runs.filter((r) => r.model_id === m.id).reduce((a, r) => a + Math.max(0, r.attempt - 1), 0),
-        fails: done.filter((r) => r.state === 'gave_up').length, tool_profile: prof,
+        model_id: m.id, mean_score: n ? +mean.toFixed(3) : null, ci95: n > 1 ? +(1.96 * sd / Math.sqrt(n)).toFixed(3) : null,
+        pass_rate: n ? +(sc.filter((x) => x >= passScore).length / n).toFixed(3) : null, runs: n,
+        avg_tokens: n ? Math.round(done.reduce((a, r) => a + r.tokens, 0) / n) : null,
+        avg_duration_s: n ? Math.round(done.reduce((a, r) => a + r.duration_s, 0) / n) : null,
+        errors: mine.reduce((a, r) => a + Math.max(0, r.attempt - 1), 0),
+        gave_up: mine.filter((r) => r.state === 'gave_up').length,
+        fails: done.filter((r) => r.classification === 'fail_timeout' || r.agent_status === 'failed').length,
+        tool_profile: prof,
       };
-    }).sort((a, b) => b.mean_score - a.mean_score);
+    }).sort((a, b) => (b.mean_score ?? -1) - (a.mean_score ?? -1));
     const matrix = [];
     for (const t of this.grid.tasks) {
       for (const m of this.grid.models) {
-        const cell = this.runs.filter((r) => r.task_id === t.task_id && r.model_id === m.id && (r.state === 'scored' || r.state === 'gave_up'));
+        const cell = this.runs.filter((r) => r.task_id === t.task_id && r.model_id === m.id && r.state === 'scored' && r.score !== null);
         matrix.push({ task_id: t.task_id, model_id: m.id, n: cell.length,
-          mean_score: cell.length ? +(cell.reduce((a, r) => a + (r.score || 0), 0) / cell.length).toFixed(3) : null });
+          mean_score: cell.length ? +(cell.reduce((a, r) => a + r.score, 0) / cell.length).toFixed(3) : null });
       }
     }
-    return { models, matrix };
+    return { models, matrix, pass_score: passScore, rules: base.rules };
   }
 
   /** A run-detail object for runs without a fixture, built from what the simulator saw. */
@@ -430,23 +436,35 @@ export class MockStream {
   }
 
   failRun(run, port) {
-    const timeout = Math.random() < 0.5;
+    const timeout = Math.random() < 0.3;
+    if (timeout) {
+      // A wall-clock timeout is the model's fail: scored 0, not retried.
+      run.agent_status = 'error';
+      run.classification = 'fail_timeout';
+      run.score = 0;
+      run.finished_at = this.now();
+      this.infra(run, 'Agent hit its wall clock', false);
+      this.setState(run, 'scored', 'Timed out: counts as a fail, score 0.00');
+      this.release(port);
+      return;
+    }
     run.agent_status = 'error';
     this.summary.retries += 1;
     if (run.attempt >= 3) {
-      run.classification = 'fail_timeout';
+      run.classification = 'rerun_agent';
       run.finished_at = this.now();
       this.infra(run, `Attempt ${run.attempt} failed again; giving up`, false);
-      this.setState(run, 'gave_up', 'Classified fail_timeout after 3 attempts');
+      this.setState(run, 'gave_up', 'agent: 3 attempts; last: provider error');
     } else {
-      run.classification = timeout ? 'fail_timeout' : 'rerun_agent';
-      this.infra(run, timeout ? 'Provider call timed out after 180 s' : `Provider returned ${pick([502, 503])} during step ${run.steps}`, false);
+      run.classification = 'rerun_agent';
+      this.infra(run, `Provider returned ${pick([502, 503])} during step ${run.steps}`, false);
       run.attempt += 1;
       this.summary.attempts += 1;
-      this.setState(run, 'retry', `Requeued as attempt ${run.attempt} (${run.classification})`);
+      this.setState(run, 'retry', `Requeued as attempt ${run.attempt} (rerun_agent)`);
     }
     this.release(port);
   }
+
 
   refreshSummary() {
     const c = { queued: 0, running: 0, retrying: 0, scored: 0, gave_up: 0 };

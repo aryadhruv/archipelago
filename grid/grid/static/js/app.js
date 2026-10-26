@@ -81,6 +81,7 @@ function paintIndicator(summary) {
 
 // ---------- boot ----------
 (async function boot() {
+  await api.initMode();
   if (api.MOCK) document.getElementById('mock-badge').hidden = false;
   try {
     await init();
@@ -90,6 +91,7 @@ function paintIndicator(summary) {
     return;
   }
   document.getElementById('grid-id').textContent = store.grid.grid_id;
+  document.title = `Archipelago · ${store.grid.grid_id}`;
   paintIndicator(store.summary);
   on('summary', paintIndicator);
   goLive();

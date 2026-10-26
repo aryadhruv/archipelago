@@ -7,11 +7,12 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Build
 
-1. **Dashboard.** The API (`grid serve`) and a static UI preview on mock data
-   exist. What's left: connect the preview to the API (fetch + EventSource),
-   use the leaderboard's `rules` and `pass_score` from the API, poll
-   `GET /api/smoke` (the smoke test runs in the background), and check the UI
-   with a real grid.
+1. **Dashboard follow-ups.**
+   - More than 8 models reuse the 8 palette hues. Every view also shows the
+     model's name or initials, but colour alone no longer tells them apart;
+     add a second encoding (an outline or pattern) for models 9 and up.
+   - Check layouts under 1280px wide (the page scrolls sideways a little).
+   - After Stop, the indicator says "Not started"; it could say "Stopped".
 2. **Sub-agents.** `agents/runner/utils/subagent.py::spawn_subagent()` exists,
    but nothing calls it and no harness exposes it as a tool. To allow
    delegation, add a `delegate(task, context)` tool to `react_toolbelt_agent`.
@@ -89,6 +90,9 @@ Apply these in every grid.
   retries with backoff for infra errors, explicit context windows, and the
   errors-vs-fails rules (see `grid/README.md`). State is in SQLite, so a
   stopped grid resumes.
+- **Dashboard** (`grid serve`): setup and preflight, Mission Control, the
+  Live Map (live, focus with the world's files, replay), run detail,
+  leaderboard and infra, on the API's REST endpoints and event stream.
 - **Leaderboard** (`GET /api/leaderboard`): mean score ± CI, pass rate,
   tokens, time, errors, fails and tool use per model, and a task × model
   matrix.

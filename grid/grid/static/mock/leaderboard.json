@@ -21,7 +21,8 @@
         "slides_server": 19,
         "chat_server": 16,
         "pdf_server": 12
-      }
+      },
+      "gave_up": 0
     },
     {
       "model_id": "model_b",
@@ -44,7 +45,8 @@
         "slides_server": 15,
         "chat_server": 14,
         "pdf_server": 7
-      }
+      },
+      "gave_up": 0
     },
     {
       "model_id": "model_d",
@@ -66,7 +68,8 @@
         "code_execution_server": 6,
         "slides_server": 12,
         "chat_server": 10
-      }
+      },
+      "gave_up": 0
     },
     {
       "model_id": "model_c",
@@ -89,7 +92,8 @@
         "slides_server": 19,
         "pdf_server": 7,
         "chat_server": 11
-      }
+      },
+      "gave_up": 0
     },
     {
       "model_id": "model_e",
@@ -112,7 +116,8 @@
         "slides_server": 11,
         "chat_server": 9,
         "pdf_server": 5
-      }
+      },
+      "gave_up": 0
     },
     {
       "model_id": "model_f",
@@ -135,7 +140,8 @@
         "slides_server": 9,
         "chat_server": 12,
         "pdf_server": 6
-      }
+      },
+      "gave_up": 0
     }
   ],
   "matrix": [
@@ -427,5 +433,7 @@
       "mean_score": 0.4,
       "n": 1
     }
-  ]
+  ],
+  "pass_score": 1.0,
+  "rules": "Scored runs only. A failed agent or a wall-clock timeout counts against the model; runs that gave up on infra errors are left out of the score. Pass = score \u2265 1.00."
 }

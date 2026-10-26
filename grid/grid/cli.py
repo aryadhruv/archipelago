@@ -3,7 +3,7 @@
 uv run python -m grid validate path/to/grid.json
 uv run python -m grid run path/to/grid.json [--rebuild] [--skip-preflight]
 uv run python -m grid status path/to/grid.json
-uv run python -m grid serve path/to/grid.json [--start] [--port 7000]
+uv run python -m grid serve path/to/grid.json [--start] [--port 7070]
 """
 
 import argparse
@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("serve", help="serve the dashboard and API")
     p.add_argument("config", type=Path)
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=7000)
+    p.add_argument("--port", type=int, default=7070)
     p.add_argument("--start", action="store_true", help="start the grid right away")
     p.add_argument(
         "--rebuild", action="store_true", help="rebuild the environment image"

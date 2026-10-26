@@ -84,13 +84,24 @@ export const theme = () => document.documentElement.dataset.theme || 'dark';
 const DARK_STEP = {
   '#2a78d6': '#3987e5', '#eb6834': '#d95926', '#1baf7a': '#199e70',
   '#eda100': '#c98500', '#e87ba4': '#d55181', '#008300': '#008300',
+  '#6250d6': '#9085e9', '#e34948': '#e66767',
 };
+// Slots in their validated order. A model gets the slot of its position in
+// the grid unless the API names a color.
+const SLOTS = Object.keys(DARK_STEP);
 let MODELS = {};
 export function registerModels(models) {
-  MODELS = Object.fromEntries(models.map((m) => [m.id, m]));
+  // Past eight models, hues repeat: labels and initials carry identity there.
+  MODELS = Object.fromEntries(models.map((m, i) => [m.id, { ...m, color: m.color || SLOTS[i % SLOTS.length] }]));
 }
 export const modelById = (id) => MODELS[id];
 export const modelLabel = (id) => (MODELS[id] ? MODELS[id].label : id);
+/** One or two characters for a model's chip: "Model A" → "A", "Haiku 5.5" → "H5". */
+export function modelInitials(id) {
+  const words = modelLabel(id).replace(/[()]/g, '').split(/\s+/).filter(Boolean);
+  if (words.length === 2 && words[0].toLowerCase() === 'model') return words[1].slice(0, 2);
+  return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
 export function modelColor(id) {
   const m = MODELS[id];
   if (!m) return 'var(--text-muted)';

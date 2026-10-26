@@ -13,6 +13,12 @@ export function render(root) {
 
   // ---------- header + controls ----------
   const pauseBtn = h('button', { class: 'btn', type: 'button' });
+  // Stops every run in flight (their sandboxes come down) and requeues them.
+  const stopBtn = h('button', { class: 'btn btn-ghost', type: 'button', title: 'Stop all runs in flight and requeue them' }, icon('x', 14), 'Stop');
+  stopBtn.addEventListener('click', async () => {
+    stopBtn.disabled = true;
+    try { await api.cancelGrid(); } finally { stopBtn.disabled = false; }
+  });
   const banner = h('div', { class: 'banner', hidden: true },
     icon('play', 18), h('div', { class: 'grow' }, h('b', null, 'The grid is not running. '),
       h('span', { class: 'muted' }, 'The board shows the latest snapshot. Start the grid to stream live progress.')),
@@ -30,7 +36,7 @@ export function render(root) {
   root.append(
     h('div', { class: 'page-head' },
       h('div', null, h('h1', null, 'Mission Control'), h('div', { class: 'sub' }, `${g.totals.tasks} tasks × ${g.totals.models} models × ${g.totals.repeats} repeats`)),
-      h('div', { class: 'actions' }, pauseBtn)),
+      h('div', { class: 'actions' }, pauseBtn, stopBtn)),
     banner, kpis,
     h('div', { class: 'mc' },
       h('div', { style: { display: 'grid', gap: '16px', minWidth: 0 } },
@@ -51,6 +57,7 @@ export function render(root) {
     if (!sm) return;
     banner.hidden = !(sm.state === 'idle');
     pauseBtn.hidden = sm.state === 'idle' || sm.state === 'done';
+    stopBtn.hidden = pauseBtn.hidden;
     clear(pauseBtn).append(icon(sm.state === 'paused' ? 'play' : 'pause', 14), sm.state === 'paused' ? 'Resume' : 'Pause');
     paintKpis(kpis, sm, g.totals.runs);
     paintWorkers(workers, sm);
@@ -142,13 +149,17 @@ function tickerRow(e, fresh) {
     what = 'graded';
   } else if (e.kind === 'infra') {
     cls = e.ok === false ? 'err' : '';
+  } else if (e.kind === 'grid_state') {
+    // The grid as a whole: running, paused, stopped, cancelled, failed.
+    what = e.state || 'state';
+    cls = e.state === 'failed' ? 'err' : '';
   }
   return h('li', { class: fresh ? 'fresh' : '' },
     h('span', { class: 't' }, fmtClock(e.ts)),
     h('span', { class: 'bar', style: { background: e.model_id ? modelColor(e.model_id) : 'var(--text-muted)' } }),
     h('div', { class: 'body' },
       h('div', { class: 'line1' },
-        e.model_id ? h('b', null, modelLabel(e.model_id)) : h('b', null, 'Infra'),
+        e.model_id ? h('b', null, modelLabel(e.model_id)) : h('b', null, e.kind === 'grid_state' ? 'Grid' : 'Infra'),
         task ? h('span', { class: 'muted' }, task.task_name) : null,
         h('span', { class: cls || 'text-2' }, '· ' + what)),
       detail ? h('div', { class: 'line2 ' + cls }, detail) : null));

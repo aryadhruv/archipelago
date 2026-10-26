@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
   h, icon, clear, fmtTokens, fmtDuration, fmtScore, fmtClock, fmtInt, modelColor, modelInk, modelLabel, serverLabel,
-  shortTool, stateLabel, stateGroup, emptyState, scoreColor, scoreInk, tip,
+  shortTool, stateLabel, stateGroup, emptyState, scoreColor, scoreInk, tip, modelInitials,
 } from '../util.js';
 import { stackedBars, legend } from '../charts.js';
 
@@ -40,24 +40,34 @@ export function render(root, route) {
     const fact = (k, v) => h('div', { class: 'fact' }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v));
     const replayBtn = h('a', { class: 'btn', href: `#/map?replay=${encodeURIComponent(run.run_id)}` }, icon('map', 14), 'Replay on map');
     if (!events.length) { replayBtn.classList.add('disabled'); replayBtn.removeAttribute('href'); replayBtn.setAttribute('aria-disabled', 'true'); }
+    // A finished run can be run again with a fresh attempt budget.
+    const retryBtn = (grp === 'scored' || grp === 'gave_up') && !api.MOCK
+      ? h('button', { class: 'btn', type: 'button' }, icon('retry', 14), 'Run again')
+      : null;
+    if (retryBtn) {
+      retryBtn.addEventListener('click', async () => {
+        retryBtn.disabled = true;
+        try { await api.retryRun(run.run_id); load(); } catch (err) { retryBtn.disabled = false; retryBtn.title = err.message; }
+      });
+    }
 
     const head = h('div', { class: 'run-head' },
       h('div', null,
         h('div', { class: 'run-title' },
-          h('span', { class: 'model-chip', style: { background: modelColor(run.model_id), color: modelInk(run.model_id) } }, modelLabel(run.model_id).slice(-1)),
+          h('span', { class: 'model-chip', style: { background: modelColor(run.model_id), color: modelInk(run.model_id) } }, modelInitials(run.model_id)),
           h('h1', null, `${modelLabel(run.model_id)} · ${task.task_name}`), pill),
         h('div', { class: 'run-facts' },
           fact('Run', h('span', { class: 'mono' }, run.run_id)),
           fact('World', world.name),
           fact('Repeat', String(run.repeat)),
-          fact('Attempt', `${run.attempt} of 3`),
+          fact('Attempt', `${run.attempt} of ${store.grid.max_attempts ?? 3}`),
           fact('Duration', fmtDuration(run.duration_s)),
           fact('Tokens', fmtTokens(run.tokens)),
           fact('Steps', fmtInt(run.steps)),
           fact('Tool calls', fmtInt(run.tool_calls)))),
       h('div', { style: { display: 'grid', gap: '12px', justifyItems: 'end' } },
         h('div', { class: 'score-big num' }, fmtScore(run.score), h('small', null, run.classification ? `classification: ${run.classification}` : 'not scored yet')),
-        replayBtn));
+        h('div', { style: { display: 'flex', gap: '8px' } }, retryBtn, replayBtn)));
 
     const note = run._synthetic
       ? h('div', { class: 'banner' }, icon('warn', 16), h('div', { class: 'grow muted' },
