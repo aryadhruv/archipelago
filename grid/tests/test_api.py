@@ -136,3 +136,10 @@ def test_ui_is_served_with_revalidation(setup):
     page = client.get("/")
     assert page.status_code == 200 and "Archipelago" in page.text
     assert client.get("/css/app.css").headers["cache-control"] == "no-cache"
+
+
+def test_demo_is_served_under_its_own_path(setup):
+    _, _, client = setup
+    assert client.get("/demo", follow_redirects=False).headers["location"] == "/demo/"
+    assert "Archipelago" in client.get("/demo/").text
+    assert client.get("/demo/mock/summary.json").json()["state"]

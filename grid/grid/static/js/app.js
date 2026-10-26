@@ -83,13 +83,12 @@ function paintIndicator(summary) {
 
 // ---------- boot ----------
 (async function boot() {
-  await api.initMode();
   if (api.MOCK) document.getElementById('mock-badge').hidden = false;
   try {
     await init();
   } catch (err) {
     console.error(err);
-    view.append(emptyState('Could not load the grid', `${err.message}. Serve this folder over HTTP (python3 -m http.server).`, 'warn'));
+    view.append(emptyState('Could not load the grid', `${err.message}. Is \`grid serve\` running? Demo data is at /demo/.`, 'warn'));
     return;
   }
   document.getElementById('grid-id').textContent = store.grid.grid_id;

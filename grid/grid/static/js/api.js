@@ -1,28 +1,16 @@
 // Data layer. Every screen reads data through these functions only.
 //
-// Served by `grid serve`, the functions call the real API (fetch +
-// EventSource). Served as plain files (no API), or with `?mock=1`, they read
-// the fixtures in ./mock/ and drive the live stream from mock_stream.js.
-// `?mock=0` insists on the API. The fixtures are the API contract: one file
-// per endpoint, see README.md.
+// At `/` the functions call the real API (fetch + EventSource), and an API
+// error is shown as an error. Only under `/demo/` do they read the fixtures in
+// ./mock/ and drive the live stream from mock_stream.js: demo data is never a
+// fallback. The fixtures are the API contract: one file per endpoint, see
+// README.md.
 
 import { MockStream } from './mock_stream.js';
 
 const params = new URLSearchParams(location.search);
 const API = params.get('api') || ''; // optional base URL for the real backend
-export let MOCK = params.get('mock') === '1';
-
-/** Decide between the API and the fixtures. Call once before anything else. */
-export async function initMode() {
-  if (params.has('mock')) return MOCK;
-  try {
-    const res = await fetch(API + '/api/summary', { headers: { Accept: 'application/json' } });
-    MOCK = !(res.ok && (res.headers.get('content-type') || '').includes('json'));
-  } catch {
-    MOCK = true;
-  }
-  return MOCK;
-}
+export const MOCK = /\/demo\/(index\.html)?$/.test(location.pathname);
 
 // ---------- transport ----------
 async function getJSON(path) {
