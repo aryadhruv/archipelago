@@ -14,6 +14,12 @@ what we removed.
   presentations, pdfs, mail, calendar, chat, code.
 - **CAD verifiers.** `kicad`, `freecad` and `cad_llm_judge`, with their
   dependencies (cadquery, OCP, trimesh, …).
+- **`exclude-newer` cutoffs.** Upstream's rolling `exclude-newer = "7 days"`
+  and its per-package exemptions are gone from `agents/`, `environment/` and
+  `grading/`. Re-locking on different days resolved different sets, and uv
+  releases older than 0.13.4 couldn't parse them. The lockfiles pin every
+  dependency, and `uv sync --locked` installs exactly those. The environment
+  image now pins uv 0.13.4.
 
 ## Added
 

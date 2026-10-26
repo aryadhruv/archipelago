@@ -90,17 +90,6 @@ data-science = [
 [tool.uv.sources]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 
-[tool.uv]
-exclude-newer = "7 days"
-# index. The rolling cooldown exists to blunt supply-chain attacks on public
-# PyPI, which does not apply here, so it is exempted outright rather than
-# re-pinned on every release. Paired with the `>=` floor in dependencies: a
-# re-lock picks up the newest client with no pyproject edit.
-# google-antigravity 0.1.11 is the first release with BudgetConfig, which is how
-# the antigravity harness caps turns. It was published inside the 7-day window,
-# so resolution needs this override until the window moves past 2026-08-13.
-exclude-newer-package = {  google-antigravity = "2026-08-14T00:00:00Z" }
-
 [tool.basedpyright]
 typeCheckingMode = "recommended"
 ignore = [

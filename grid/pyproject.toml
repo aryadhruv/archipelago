@@ -27,9 +27,6 @@ grid = ["defaults/*", "static/**/*"]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.uv]
-exclude-newer = "7 days"
-
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

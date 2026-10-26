@@ -40,9 +40,6 @@ dev = [
     "types-aiobotocore-s3>=2.24.3",
 ]
 
-[tool.uv]
-exclude-newer = "7 days"
-
 [tool.basedpyright]
 typeCheckingMode = "recommended"
 reportUnusedCallResult = "none"
