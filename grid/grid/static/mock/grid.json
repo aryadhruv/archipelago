@@ -5,6 +5,7 @@
   "git_sha": "6b4836e",
   "repeats": 3,
   "max_parallel": 6,
+  "max_attempts": 3,
   "judge_model": "openrouter/vendor-g/judge-model",
   "worlds": [
     {

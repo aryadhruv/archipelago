@@ -6,7 +6,7 @@
 import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
-  h, s, icon, clear, ICONS, SERVERS, modelColor, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
+  h, s, icon, clear, ICONS, SERVERS, modelColor, modelInk, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
   tipBody, pathFromArgs, reducedMotion, fmtInt, fmtClock, stateLabel, stateGroup,
 } from '../util.js';
 
@@ -101,7 +101,7 @@ export function render(root, route) {
     const bg = s('circle', { class: 'agent-bg', r: 26, fill: modelColor(m.id) });
     const ic = s('g', { class: 'agent-icon', transform: 'translate(-12,-12)' });
     for (const d of ICONS.agent) ic.append(s('path', { d }));
-    if (m.color.toLowerCase() === '#eda100') ic.setAttribute('style', 'stroke:#0b0b0b');
+    if (modelInk(m.id) !== '#ffffff') ic.setAttribute('style', 'stroke:' + modelInk(m.id));
     const label = s('text', { class: 'node-label', x: -42, y: -2, 'text-anchor': 'end' }, m.label);
     const sub = s('text', { class: 'node-sub', x: -42, y: 14, 'text-anchor': 'end' }, '');
     grp.append(ring, bg, ic, label, sub);
@@ -227,7 +227,7 @@ export function render(root, route) {
       }
       const ag = agents.get(e.model_id);
       if (ag) ag.calls += 1;
-      const p = pathFromArgs(e.args_preview);
+      const p = e.path || pathFromArgs(e.args_preview);
       if (p && (st.mode !== 'live')) touchFile(p, false);
       paintEdgeWidth(edge);
     } else if (e.kind === 'tool_result' && e.server) {
@@ -241,7 +241,7 @@ export function render(root, route) {
         if (!e.ok) hub.errAt = performance.now();
       }
       if (!e.ok && st.mode !== 'live' && edge && edge.last) {
-        const p = pathFromArgs(edge.last.args_preview);
+        const p = edge.last.path || pathFromArgs(edge.last.args_preview);
         if (p) touchFile(p, true);
       }
     }
@@ -397,9 +397,30 @@ export function render(root, route) {
     clear(feed);
     clearParticles();
     for (const hub of hubs.values()) hub.inflight = 0;
-    if (st.focusRun) loadWorldFor(st.focusRun);
+    if (st.focusRun) loadWorldFor(st.focusRun).then(() => seedFocus(st.focusRun));
     else { panel.hidden = true; mapWrap.classList.remove('focus'); }
     paintDim();
+  }
+  /** Mark what a run already touched before focus mode opened on it. */
+  async function seedFocus(id) {
+    let events;
+    try { events = await api.getRunEvents(id); } catch { return; }
+    if (st.focusRun !== id) return;
+    const calls = new Map();
+    for (const e of events) {
+      if (e.kind === 'tool_call') {
+        calls.set(e.ref, e);
+        const p = e.path || pathFromArgs(e.args_preview);
+        if (p) { const f = fileHits.get(p) || { hits: 0, err: false, at: 0 }; f.hits += 1; fileHits.set(p, f); }
+      } else if (e.kind === 'tool_result' && !e.ok && calls.has(e.ref)) {
+        const c = calls.get(e.ref);
+        const p = c.path || pathFromArgs(c.args_preview);
+        if (p && fileHits.has(p)) fileHits.get(p).err = true;
+      }
+    }
+    for (const p of fileHits.keys()) if (!worldFiles.includes(p)) worldFiles.push(p);
+    paintTree();
+    for (const e of events.filter((x) => ['tool_call', 'tool_result', 'run_state', 'grade', 'final_answer'].includes(x.kind)).slice(-14)) pushFeed(e);
   }
   function clearParticles() {
     for (const p of particles) p.node.remove();

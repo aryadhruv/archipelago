@@ -81,6 +81,7 @@ function paintIndicator(summary) {
 
 // ---------- boot ----------
 (async function boot() {
+  await api.initMode();
   if (api.MOCK) document.getElementById('mock-badge').hidden = false;
   try {
     await init();

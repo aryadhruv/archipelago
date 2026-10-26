@@ -29,6 +29,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 STREAM_POLL_SEC = 0.5
 STREAM_HEARTBEAT_SEC = 15
 STREAM_BATCH = 500
+# A new connection starts this many events back, so a fresh page has context.
+STREAM_BACKFILL = 200
 
 
 class GridControl:
@@ -269,7 +271,7 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
         return views.events_view(store, run_id=run_id, after=after, limit=limit)
 
     @app.post("/api/runs/{run_id}/retry")
-    def retry(run_id: str) -> dict[str, Any]:
+    async def retry(run_id: str) -> dict[str, Any]:
         try:
             current = store.run(run_id)
         except KeyError as e:
@@ -299,6 +301,9 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
             state="queued",
             text="manual retry",
         )
+        # A finished grid has no workers left; start them for this run.
+        if not control.running and not smoke.running:
+            control.start()
         return views.run_row(store.run(run_id))
 
     @app.get("/api/runs/{run_id}/trajectory")
@@ -343,14 +348,15 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
         after: int | None = None,
     ) -> StreamingResponse:
         """Server-sent events. Reconnects resume from Last-Event-ID; a new
-        connection starts at the newest event unless ?after= says otherwise."""
+        connection starts STREAM_BACKFILL events back unless ?after= says
+        otherwise."""
         header = request.headers.get("last-event-id")
         if header and header.isdigit():
             cursor = int(header)
         elif after is not None:
             cursor = after
         else:
-            cursor = store.max_seq()
+            cursor = max(0, store.max_seq() - STREAM_BACKFILL)
         wanted = set(kinds.split(",")) if kinds else None
 
         async def generate() -> AsyncIterator[str]:
@@ -392,7 +398,7 @@ async def serve(
     store: Store,
     log: Log,
     host: str = "127.0.0.1",
-    port: int = 7000,
+    port: int = 7070,
     start: bool = False,
     rebuild: bool = False,
 ) -> None:

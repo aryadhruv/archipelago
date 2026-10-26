@@ -10,10 +10,10 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from grid.events import TOOLBELT, flatten
+from grid.events import TOOLBELT, flatten, iso
 from grid.inputs import Grid, verifiers_for
 from grid.scheduler import grid_order
-from grid.store import ACTIVE_STATES, Run, Store
+from grid.store import ACTIVE_STATES, PENDING_STATES, Run, Store
 
 # A run's state, grouped for display.
 PHASES = {
@@ -81,11 +81,12 @@ def grid_view(grid: Grid, store: Store) -> dict[str, Any]:
     servers = sorted(grid.mcp_config.get("mcpServers", {}))
     return {
         "grid_id": grid.grid_id,
-        "created_at": store.get_meta("created_at"),
+        "created_at": iso(store.get_meta("created_at")),
         "image_tag": manifest.get("image") or grid.env_image,
         "git_sha": manifest.get("git_sha"),
         "repeats": grid.repeats,
         "max_parallel": grid.max_parallel,
+        "max_attempts": grid.max_attempts,
         "judge_model": grid.grading_settings["llm_judge_model"],
         "worlds": [_world_info(grid, w, names) for w in grid.world_ids],
         "tasks": [
@@ -136,8 +137,8 @@ def run_row(run: Run) -> dict[str, Any]:
         "classification": run.classification,
         "reason": run.reason,
         "port": run.port,
-        "started_at": run.started_at,
-        "finished_at": run.finished_at,
+        "started_at": iso(run.started_at),
+        "finished_at": iso(run.finished_at),
         "duration_s": run.duration_s,
         "tokens": run.tokens,
         "prompt_tokens": run.prompt_tokens,
@@ -160,6 +161,28 @@ def runs_view(
         and (model is None or r.model_id == model)
         and (state is None or r.state == state)
     ]
+
+
+def _text(content: Any) -> str | None:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [b.get("text") for b in content if isinstance(b, dict)]
+        return "\n".join(p for p in parts if p) or None
+    return None
+
+
+def final_answer(trajectory: dict[str, Any] | None) -> str | None:
+    """The answer the agent submitted: trajectory.final_answer when the runner
+    filled it in, otherwise the last final_answer tool message."""
+    if not trajectory:
+        return None
+    if isinstance(trajectory.get("final_answer"), str):
+        return trajectory["final_answer"]
+    for message in reversed(trajectory.get("messages") or []):
+        if message.get("name") == "final_answer":
+            return _text(message.get("content"))
+    return None
 
 
 def run_view(grid: Grid, store: Store, run_id: str) -> dict[str, Any]:
@@ -196,13 +219,13 @@ def run_view(grid: Grid, store: Store, run_id: str) -> dict[str, Any]:
                 "kind": a["kind"],
                 "state": a["outcome"] or "running",
                 "reason": a["reason"],
-                "started_at": a["started_at"],
-                "finished_at": a["finished_at"],
+                "started_at": iso(a["started_at"]),
+                "finished_at": iso(a["finished_at"]),
             }
             for a in store.attempts(run_id)
         ],
         "usage": {"call_log": usage.get("call_log") or []},
-        "final_answer": (trajectory or {}).get("final_answer"),
+        "final_answer": final_answer(trajectory),
         "grades": None
         if grades is None
         else {
@@ -242,6 +265,9 @@ def summary_view(
     started = [r.started_at for r in runs if r.started_at]
     started_at = min(started) if started else None
     now = time.time()
+    if runs and not any(r.state in ACTIVE_STATES + PENDING_STATES for r in runs):
+        # Finished: the clock stops at the last run's end.
+        now = max((r.finished_at for r in runs if r.finished_at), default=now)
     finished = [
         r.finished_at - r.started_at
         for r in runs
@@ -258,7 +284,7 @@ def summary_view(
         "state": state,
         "counts": counts,
         "total": len(runs),
-        "started_at": started_at,
+        "started_at": iso(started_at),
         "elapsed_s": now - started_at if started_at else 0,
         "eta_s": eta,
         "tokens": {

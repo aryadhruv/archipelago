@@ -4,6 +4,7 @@ import * as api from '../api.js';
 import { store, worldById } from '../store.js';
 import {
   h, icon, fmtBytes, fmtInt, fmtTokens, modelColor, modelInk, serverLabel, tip, clear, fmtDateTime,
+  fmtDuration, fmtScore, modelLabel, modelInitials,
 } from '../util.js';
 
 export function render(root) {
@@ -21,19 +22,43 @@ export function render(root) {
   }
   startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
-    await api.startGrid();
-    location.hash = '#/live';
+    try {
+      await api.startGrid();
+      location.hash = '#/live';
+    } catch (err) {
+      clear(smokeOut).append(h('span', { class: 'pill bad' }, icon('x', 12), 'Could not start'), ' ', err.message);
+      startBtn.disabled = false;
+    }
   });
   smokeBtn.addEventListener('click', async () => {
     smokeBtn.disabled = true;
-    clear(smokeOut).append(h('span', { class: 'spinner' }), ' Running one task with one model end to end…');
-    const r = await api.runSmokeTest();
-    const task = g.tasks.find((x) => x.task_id === r.task_id);
-    const model = g.models.find((x) => x.id === r.model_id);
-    clear(smokeOut).append(
-      h('span', { class: 'pill ' + (r.ok ? 'good' : 'bad') }, icon(r.ok ? 'check' : 'x', 12), r.ok ? 'Passed' : 'Failed'),
-      ` ${task ? task.task_name : r.task_id} × ${model ? model.label : r.model_id}: score ${r.score.toFixed(2)} in ${r.duration_s} s`);
+    startBtn.disabled = true;
+    const taskName = g.tasks[0] ? g.tasks[0].task_name : '';
+    const progress = (s) => {
+      const done = s.runs.filter((r) => r.phase === 'done').length;
+      clear(smokeOut).append(h('span', { class: 'spinner' }),
+        ` Smoke test: ${taskName} on every model (${done}/${s.runs.length || g.models.length} done)…`);
+    };
+    progress({ runs: [] });
+    try {
+      const r = await api.runSmokeTest(progress);
+      // Passing means every model could call the tools and get graded, not a
+      // particular score.
+      clear(smokeOut).append(
+        h('div', null, h('span', { class: 'pill ' + (r.ok ? 'good' : 'bad') }, icon(r.ok ? 'check' : 'x', 12),
+          r.ok ? 'Every model finished' : 'Some models did not finish'), ` ${taskName}`),
+        r.error ? h('div', null, r.error) : null,
+        h('ul', { class: 'smoke-runs' }, r.runs.map((run) => h('li', null,
+          h('span', { class: 'swatch', style: { background: modelColor(run.model_id) } }),
+          ` ${modelLabel(run.model_id)}: `,
+          run.state === 'scored'
+            ? `score ${fmtScore(run.score)}${run.duration_s ? ' in ' + fmtDuration(run.duration_s) : ''}`
+            : h('span', { class: 'bad-text' }, `${run.state}${run.reason ? ' (' + run.reason.slice(0, 120) + ')' : ''}`)))));
+    } catch (err) {
+      clear(smokeOut).append(h('span', { class: 'pill bad' }, icon('x', 12), 'Smoke test failed'), ' ', err.message);
+    }
     smokeBtn.disabled = false;
+    startBtn.disabled = false;
   });
 
   const hero = h('section', { class: 'hero' },
@@ -75,7 +100,7 @@ export function render(root) {
 
   const models = h('div', { class: 'grid-auto' }, g.models.map((m) => h('div', { class: 'card card-tight' },
     h('div', { class: 'model-row' },
-      h('span', { class: 'model-chip', style: { background: modelColor(m.id), color: modelInk(m.id) } }, m.label.slice(-1)),
+      h('span', { class: 'model-chip', style: { background: modelColor(m.id), color: modelInk(m.id) } }, modelInitials(m.id)),
       h('div', null, h('div', { style: { fontWeight: 600 } }, m.label), h('div', { class: 'mono muted', style: { fontSize: '11px' } }, m.model))),
     h('dl', { class: 'kv', style: { marginTop: '12px', marginBottom: 0 } },
       h('dt', null, 'Provider'), h('dd', null, m.provider),

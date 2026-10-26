@@ -1,15 +1,28 @@
 // Data layer. Every screen reads data through these functions only.
 //
-// Mock mode (the default for now; also `?mock=1`) reads the fixtures in
-// ./mock/ and drives the live stream from mock_stream.js. With `?mock=0`
-// the same functions call the real backend (fetch + EventSource). The
-// fixtures are the API contract: one file per endpoint, see README.md.
+// Served by `grid serve`, the functions call the real API (fetch +
+// EventSource). Served as plain files (no API), or with `?mock=1`, they read
+// the fixtures in ./mock/ and drive the live stream from mock_stream.js.
+// `?mock=0` insists on the API. The fixtures are the API contract: one file
+// per endpoint, see README.md.
 
 import { MockStream } from './mock_stream.js';
 
 const params = new URLSearchParams(location.search);
-export const MOCK = params.get('mock') !== '0';
 const API = params.get('api') || ''; // optional base URL for the real backend
+export let MOCK = params.get('mock') === '1';
+
+/** Decide between the API and the fixtures. Call once before anything else. */
+export async function initMode() {
+  if (params.has('mock')) return MOCK;
+  try {
+    const res = await fetch(API + '/api/summary', { headers: { Accept: 'application/json' } });
+    MOCK = !(res.ok && (res.headers.get('content-type') || '').includes('json'));
+  } catch {
+    MOCK = true;
+  }
+  return MOCK;
+}
 
 // ---------- transport ----------
 async function getJSON(path) {
@@ -21,7 +34,11 @@ async function postJSON(path, body) {
   const res = await fetch(API + path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
   });
-  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+  if (!res.ok) {
+    // FastAPI puts the reason in `detail` (e.g. 409 "The grid is running").
+    const detail = await res.json().then((b) => b.detail).catch(() => null);
+    throw new Error(detail || `${path}: HTTP ${res.status}`);
+  }
   return res.json().catch(() => ({}));
 }
 
@@ -124,9 +141,13 @@ export function subscribe(onEvent) {
   return () => { cancelled = true; if (off) off(); };
 }
 
-/** Run IDs that have a full fixture trace (mock only; used for replay pickers). */
+/** Run IDs a replay can use: fixture traces in mock mode, recent scored runs otherwise. */
 export async function detailedRunIds() {
-  if (!MOCK) return [];
+  if (!MOCK) {
+    const runs = await getJSON('/api/runs?state=scored');
+    runs.sort((a, b) => (b.finished_at || 0) - (a.finished_at || 0));
+    return runs.slice(0, 40).map((r) => r.run_id);
+  }
   return ['r-0001', 'r-0022', 'r-0011'];
 }
 
@@ -149,14 +170,46 @@ export async function resumeGrid() {
   (await sim()).resume();
   return { ok: true };
 }
-/** POST /api/smoke: run one task with one model end to end. */
-export async function runSmokeTest() {
-  if (!MOCK) return postJSON('/api/smoke');
-  await new Promise((r) => setTimeout(r, 2600));
-  return { ok: true, run_id: 'smoke-0001', task_id: 'organize_project_folder', model_id: 'model_a', score: 1.0, duration_s: 41 };
+/**
+ * POST /api/smoke, then poll GET /api/smoke until it finishes: one run per
+ * model on the first task. onProgress(status) sees each poll.
+ * Resolves to {state, ok, task_id, runs:[run row], error}.
+ */
+export async function runSmokeTest(onProgress = () => {}) {
+  if (MOCK) {
+    const g = await fixture('grid.json');
+    const task = g.tasks[0];
+    const runs = g.models.map((m, i) => ({
+      run_id: `smoke-${m.id}`, task_id: task.task_id, model_id: m.id, state: 'scored', phase: 'done',
+      score: i === 3 ? 0.5 : 1.0, duration_s: 35 + i * 4, tokens: 9000 + i * 1300,
+    }));
+    onProgress({ state: 'running', ok: null, task_id: task.task_id, runs: [] });
+    await new Promise((r) => setTimeout(r, 2600));
+    return { state: 'done', ok: true, task_id: task.task_id, runs, error: null };
+  }
+  let status = await postJSON('/api/smoke');
+  while (status.state === 'running') {
+    onProgress(status);
+    await new Promise((r) => setTimeout(r, 3000));
+    status = await getJSON('/api/smoke');
+  }
+  return status;
+}
+
+/** POST /api/grid/cancel */
+export async function cancelGrid() {
+  if (!MOCK) return postJSON('/api/grid/cancel');
+  (await sim()).pause();
+  return { ok: true };
+}
+
+/** POST /api/runs/{id}/retry */
+export async function retryRun(id) {
+  if (!MOCK) return postJSON(`/api/runs/${encodeURIComponent(id)}/retry`);
+  return { ok: true };
 }
 /** Is the stream running? (mock: has Start been pressed) */
 export async function isStreaming() {
-  if (!MOCK) return true;
+  if (!MOCK) return (await getJSON('/api/summary')).state !== 'idle';
   return (await sim()).started;
 }

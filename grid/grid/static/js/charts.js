@@ -118,6 +118,7 @@ export function ciMark(mean, ci, color, w = 120) {
   if (ci !== null && ci !== undefined) {
     svg.append(s('line', { x1: X(mean - ci), x2: X(mean + ci), y1: H / 2, y2: H / 2, stroke: 'var(--text-2)', 'stroke-width': 2, 'stroke-linecap': 'round' }));
   }
+  if (mean === null || mean === undefined) return svg; // no scored runs yet
   svg.append(s('circle', { cx: X(mean), cy: H / 2, r: 4.5, fill: color, stroke: 'var(--surface-1)', 'stroke-width': 2 }));
   return svg;
 }

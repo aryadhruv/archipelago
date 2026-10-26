@@ -11,7 +11,7 @@ import asyncio
 import json
 import re
 from collections.abc import Callable, Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +87,13 @@ def _result_preview(payload: Any) -> str | None:
     if _IMAGE_PAYLOAD.search(text[:2000]):
         return "[image]"
     return _clip(text)
+
+
+def iso(epoch: float | None) -> str | None:
+    """Epoch seconds as an ISO-8601 UTC string, the API's time format."""
+    if epoch is None:
+        return None
+    return datetime.fromtimestamp(epoch, UTC).isoformat().replace("+00:00", "Z")
 
 
 def _epoch(timestamp: str | None) -> float | None:
@@ -259,7 +266,7 @@ def flatten(row: dict[str, Any]) -> dict[str, Any]:
     data = row.get("data") or {}
     event = {
         "seq": row["seq"],
-        "ts": data.get("ts") or row["ts"],
+        "ts": iso(data.get("ts") or row["ts"]),
         "run_id": row["run_id"],
         "kind": row["kind"],
     }

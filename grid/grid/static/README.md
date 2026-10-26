@@ -1,30 +1,35 @@
-# Grid dashboard (static preview)
+# Grid dashboard
 
-A clickable preview of the grid runner's dashboard. A grid runs every task on
-every model, several times. Each run starts a Docker sandbox, loads a world of
-files, lets an agent work through MCP tool servers, and then grades the result
-against the task's rubric.
+The grid runner's dashboard. A grid runs every task on every model, several
+times. Each run starts a Docker sandbox, loads a world of files, lets an agent
+work through MCP tool servers, and then grades the result against the task's
+rubric.
 
-There is no backend yet. Everything comes from the fixtures in `mock/` and from
-a scripted simulator (`js/mock_stream.js`) that keeps the screens live. The
-fixtures double as the API contract the backend will serve.
+`python -m grid serve <grid.json>` serves this folder at `/` together with the
+API. Served on its own, it runs on the fixtures in `mock/` and a scripted
+simulator (`js/mock_stream.js`), which is handy for working on the UI without
+Docker or model calls. The fixtures double as the API contract: `grid/tests/
+test_contract.py` checks that the API serves every field they have.
 
 Plain HTML, CSS and ES modules. No libraries, no CDN, no build step.
 
 ## Open it
 
 ```bash
-python3 -m http.server -d grid/grid/static 7001
-# then open http://localhost:7001/
+cd grid && uv run --locked python -m grid serve path/to/grid.json   # real data: http://127.0.0.1:7070/
+python3 -m http.server -d grid/grid/static 7001                     # mock data: http://localhost:7001/
 ```
 
 It must be served over HTTP: browsers block ES modules and `fetch` on `file://`.
 
 URL options:
 
-- `?mock=1` (the default for now): use the fixtures and the simulator.
-- `?mock=0`: call the real API on the same origin (`fetch` + `EventSource`).
-- `?mock=0&api=http://host:port`: call the real API on another origin.
+- No option: use the API if the page's origin serves one (`GET /api/summary`
+  answers with JSON), otherwise the fixtures and the simulator.
+- `?mock=1`: always the fixtures and the simulator.
+- `?mock=0`: always the API.
+- `&api=http://host:port`: call an API on another origin. The API doesn't
+  send CORS headers, so this works only through a proxy that adds them.
 
 ## Screens
 
@@ -52,7 +57,8 @@ default; the choice is kept in `localStorage`).
   some runs are retried and a few give up after three attempts.
 - Runs `r-0001`, `r-0022` and `r-0011` have full detail and event fixtures. Other
   runs show what the simulator produced in this session, with a note saying so.
-- **Smoke test** waits about 3 seconds and returns a canned pass.
+- **Smoke test** waits about 3 seconds and returns a canned result for every
+  model.
 
 ## Data contract
 
@@ -72,15 +78,16 @@ nothing else.
 | `getWorldFiles(id)` | `GET /api/worlds/{id}/files` | `mock/world_<world_id>.json` |
 | `subscribe(onEvent)` | `GET /api/stream` (SSE, one event per `data:` line) | driven by `js/mock_stream.js` |
 | `startGrid()` / `pauseGrid()` / `resumeGrid()` | `POST /api/grid/start`, `/pause`, `/resume` | simulator |
-| `runSmokeTest()` | `POST /api/smoke` | canned result |
+| `runSmokeTest(onProgress)` | `POST /api/smoke`, then `GET /api/smoke` every 3 s until done | canned result |
+| `cancelGrid()` | `POST /api/grid/cancel` | simulator (pauses) |
+| `retryRun(id)` | `POST /api/runs/{id}/retry` | no-op |
 
-`GET /api/worlds/{id}/files` and the `POST` actions are additions this preview
-needs beyond the original endpoint list (the map's focus mode needs a file tree).
+`grid/README.md` lists every endpoint.
 
 ### Shapes
 
 ```text
-grid        {grid_id, created_at, image_tag, git_sha, repeats, max_parallel, judge_model,
+grid        {grid_id, created_at, image_tag, git_sha, repeats, max_parallel, max_attempts, judge_model,
              worlds:[{world_id, name, size_bytes, file_count, apps:[server]}],
              tasks:[{task_id, task_name, world_id, prompt, criteria_count, mcp_servers:[server]}],
              models:[{id, label, model, provider, context_window_tokens, max_concurrency, color}],
@@ -100,9 +107,11 @@ run         run row + {attempts:[{attempt, state, reason, started_at, finished_a
                        grades:{final_score, grading_run_status,
                                criteria:[{verifier_id, criteria, score, passed, rationale}]}}
 events      [event]
-leaderboard {models:[{model_id, mean_score, ci95, pass_rate, runs, avg_tokens, avg_duration_s,
-                      errors, fails, tool_profile:{server: calls}}],
-             matrix:[{task_id, model_id, mean_score|null, n}]}
+leaderboard {models:[{model_id, mean_score|null, ci95, pass_rate|null, runs, avg_tokens, avg_duration_s,
+                      errors, gave_up, fails, tool_profile:{server: calls}}],
+             matrix:[{task_id, model_id, mean_score|null, n}],
+             pass_score, rules}
+smoke       {state:"idle"|"running"|"done", ok|null, task_id, runs:[run row], error}
 world files {world_id, files:[{path, size_bytes}]}
 ```
 
@@ -112,7 +121,10 @@ Enumerations:
 - `phase` (coarse grouping of `state`): `queued | setup | agent | grading | done`
 - `agent_status`: `pending | running | completed | cancelled | failed | error` (as in `agents/runner/agents/models.py`)
 - `classification`: `scored | rerun_agent | rerun_grading | fail_timeout | null`
-- leaderboard: a run that gave up counts as score 0; pass means score ≥ 0.80; `errors` counts extra attempts.
+- leaderboard (the API decides; the page shows its `rules`): only scored runs
+  count; a failed agent or a wall-clock timeout counts against the model; runs
+  that gave up on infra errors are left out of the score and counted in
+  `gave_up`; `errors` counts extra attempts; pass means score ≥ `pass_score`.
 
 ### Event schema (`/api/runs/{id}/events` and `/api/stream`)
 

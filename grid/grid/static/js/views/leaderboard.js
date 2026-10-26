@@ -13,14 +13,17 @@ export function render(root) {
   let data = null;
   const exportCsv = h('button', { class: 'btn', type: 'button', onclick: () => data && download('leaderboard.csv', toCsv(data), 'text/csv') }, icon('download', 14), 'CSV');
   const exportJson = h('button', { class: 'btn', type: 'button', onclick: () => data && download('leaderboard.json', JSON.stringify(data, null, 2), 'application/json') }, icon('download', 14), 'JSON');
+  // The API decides what counts; show its rules rather than our own copy.
+  const rules = h('div', { class: 'sub' }, '');
   root.append(
     h('div', { class: 'page-head' },
-      h('div', null, h('h1', null, 'Leaderboard'), h('div', { class: 'sub' }, 'Finished runs only. A run that gave up counts as score 0. Pass = score ≥ 0.80.')),
+      h('div', null, h('h1', null, 'Leaderboard'), rules),
       h('div', { class: 'actions' }, h('span', { class: 'panel-note' }, 'Export'), exportCsv, exportJson)),
     body);
 
   async function load() {
     try { data = await api.getLeaderboard(); } catch (err) { clear(body).append(emptyState('Could not load the leaderboard', String(err), 'warn')); return; }
+    rules.textContent = data.rules || '';
     paint();
   }
   function paint() {
@@ -59,7 +62,9 @@ function rankTable(data) {
     h('thead', null, h('tr', null,
       h('th', null, '#'), h('th', null, 'Model'), h('th', null, 'Mean score ± 95% CI'), h('th', { class: 'num' }, 'Pass rate'),
       h('th', { class: 'num' }, 'Runs'), h('th', { class: 'num' }, 'Avg tokens'), h('th', { class: 'num' }, 'Avg time'),
-      h('th', { class: 'num' }, 'Errors'), h('th', { class: 'num' }, 'Fails'))),
+      h('th', { class: 'num', title: 'Extra attempts after infra or grading errors' }, 'Errors'),
+      h('th', { class: 'num', title: 'Runs that gave up after max attempts; not scored' }, 'Gave up'),
+      h('th', { class: 'num', title: 'Agent failed or timed out; scored against the model' }, 'Fails'))),
     h('tbody', null, data.models.map((m, i) => {
       const md = modelById(m.model_id);
       const ci = h('span', { class: 'ci' }, ciMark(m.mean_score, m.ci95, modelColor(m.model_id), 140),
@@ -75,6 +80,7 @@ function rankTable(data) {
         h('td', { class: 'num' }, fmtTokens(m.avg_tokens)),
         h('td', { class: 'num' }, fmtDuration(m.avg_duration_s)),
         h('td', { class: 'num' }, m.errors ? h('span', null, icon('retry', 12), ' ', fmtInt(m.errors)) : '0'),
+        h('td', { class: 'num' }, fmtInt(m.gave_up || 0)),
         h('td', { class: 'num', style: m.fails ? { color: 'var(--critical-text)' } : null }, m.fails ? h('span', null, icon('x', 12), ' ', fmtInt(m.fails)) : '0'));
     }))));
 }
@@ -126,10 +132,10 @@ function profile(data) {
 }
 
 function toCsv(data) {
-  const rows = [['rank', 'model_id', 'label', 'model', 'mean_score', 'ci95', 'pass_rate', 'runs', 'avg_tokens', 'avg_duration_s', 'errors', 'fails']];
+  const rows = [['rank', 'model_id', 'label', 'model', 'mean_score', 'ci95', 'pass_rate', 'runs', 'avg_tokens', 'avg_duration_s', 'errors', 'gave_up', 'fails']];
   data.models.forEach((m, i) => {
     const md = modelById(m.model_id) || {};
-    rows.push([i + 1, m.model_id, md.label, md.model, m.mean_score, m.ci95 ?? '', m.pass_rate, m.runs, m.avg_tokens, m.avg_duration_s, m.errors, m.fails]);
+    rows.push([i + 1, m.model_id, md.label, md.model, m.mean_score ?? '', m.ci95 ?? '', m.pass_rate ?? '', m.runs, m.avg_tokens ?? '', m.avg_duration_s ?? '', m.errors, m.gave_up ?? 0, m.fails]);
   });
   rows.push([]);
   rows.push(['task_id', 'model_id', 'mean_score', 'n']);
