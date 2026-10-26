@@ -69,6 +69,8 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `env_image` | built from the checked-out `environment/` and `mcp_servers/` | Pin an existing image |
 | `output_dir` | `runs` | |
 | `pass_score` | 1.0 | The score a run needs to count as a pass on the leaderboard |
+| `agent_grace_sec` | 600 | Seconds past the agent's own wall clock before the grid kills it (scored as a timeout) |
+| `grading_timeout_sec` | 3600 | Seconds before the grid kills a grading attempt and reruns grading |
 
 Each rubric criterion becomes one `output_llm` verifier. The first one is the
 primary objective.
@@ -90,8 +92,9 @@ Errors are told from fails like this:
 |---|---|
 | Agent `completed` or `failed` | Graded and counted |
 | Agent `error` with a wall-clock fault | Counted as a fail, score 0 |
-| Any other agent `error`, `cancelled`, infra failure (`/apps` 503, Docker) | Agent rerun, with backoff |
+| Any other agent `error`, `cancelled`, infra failure (`/apps` 503, Docker, a dropped sandbox connection, a full disk) or an unexpected worker error | Agent rerun, with backoff |
 | Grading not `completed` with a score (a verifier raised or errored, e.g. a judge API or auth failure, after the judge's own 5 retries) | Grading rerun on the same trajectory and snapshots; no score is recorded |
+| Grading killed at `grading_timeout_sec` | Grading rerun |
 | `max_attempts` used | `gave_up` |
 
 The image is built once per grid and tagged after the git trees it's built
@@ -179,3 +182,6 @@ the model. Runs that gave up after `max_attempts` infra or grading errors are
 left out of the score and reported as `gave_up`, and `errors` counts the extra
 attempts, so a flaky provider is visible without lowering the score. A run
 passes at `pass_score`.
+
+How every dashboard number is calculated and aggregated, with its caveats:
+[`docs/grid-analytics.md`](../docs/grid-analytics.md).

@@ -8,13 +8,14 @@ import asyncio
 import contextlib
 import json
 import os
+import signal
 import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
 
 from grid.classify import Outcome, Verdict, classify_agent, classify_grading
-from grid.envctl import Environment, InfraError
+from grid.envctl import INFRA_ERRORS, Environment
 from grid.events import AgentEventNormalizer, grading_progress, tail_lines
 from grid.inputs import REPO_DIR, Grid, agent_config_for, verifiers_for
 from grid.store import Run, Store
@@ -51,19 +52,32 @@ async def _run_logged(
 ) -> int | None:
     """Run a command with its output in log_path. None if it was killed at timeout."""
     with log_path.open("wb") as out:
+        # Its own process group: killing `uv run` alone leaves its Python
+        # child running, still spending tokens and writing into the attempt.
         proc = await asyncio.create_subprocess_exec(
-            *cmd, cwd=cwd, env=env, stdout=out, stderr=asyncio.subprocess.STDOUT
-        )
+            *cmd, cwd=cwd, env=env, stdout=out, stderr=asyncio.subprocess.STDOUT,
+            start_new_session=True,
+        )  # fmt: skip
         try:
             return await asyncio.wait_for(proc.wait(), timeout)
         except TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await _kill_group(proc)
             return None
         except asyncio.CancelledError:
-            proc.kill()
-            await proc.wait()
+            await _kill_group(proc)
             raise
+
+
+async def _kill_group(proc: asyncio.subprocess.Process, grace: float = 10) -> None:
+    """SIGTERM the process group, then SIGKILL whatever is left after grace."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(proc.pid, sig)
+        try:
+            await asyncio.wait_for(proc.wait(), grace)
+            return
+        except TimeoutError:
+            continue
 
 
 @contextlib.asynccontextmanager
@@ -133,6 +147,20 @@ class Worker:
             port=None,
         )
 
+    def worker_error(self, run_id: str, error: Exception) -> None:
+        """An unexpected exception: count it as an attempt of the current phase."""
+        run = self.store.run(run_id)
+        kind = run.resume_from
+        used = (
+            run.agent_attempts - run.agent_floor
+            if kind == "agent"
+            else run.grading_attempts - run.grading_floor
+        )
+        verdict = Verdict.RERUN_AGENT if kind == "agent" else Verdict.RERUN_GRADING
+        self._retry_or_give_up(
+            run, kind, max(used, 1), Outcome(verdict, f"worker error: {error!r}")
+        )
+
     def _retry_or_give_up(
         self, run: Run, kind: str, used: int, outcome: Outcome
     ) -> None:
@@ -181,8 +209,8 @@ class Worker:
         attempt_id = self.store.start_attempt(run.run_id, "agent", number, directory)
         try:
             outcome = await self._agent_phase(run, port, directory, number)
-        except InfraError as e:
-            outcome = Outcome(Verdict.RERUN_AGENT, f"infra: {e}")
+        except INFRA_ERRORS as e:
+            outcome = Outcome(Verdict.RERUN_AGENT, f"infra: {e!r}")
             self._emit(run, "infra", text=str(e)[:2000])
         self.store.finish_attempt(attempt_id, outcome.verdict.value, outcome.reason)
         return outcome
@@ -206,36 +234,44 @@ class Worker:
             # The state the agent starts from (world plus overlay) is what
             # grading diffs the final state against.
             initial = await env.snapshot(directory / "initial.tar.gz")
-            tar_gz_to_zip(initial, directory / "initial.zip")
+            await asyncio.to_thread(tar_gz_to_zip, initial, directory / "initial.zip")
             initial.unlink()
 
             self._state(run, "apps_starting")
             await env.configure_apps(self.grid.mcp_config)
 
             self._state(run, "agent_running")
+            agent_started = time.time()
             trajectory = await self._run_agent(run, port, directory, number)
+            agent_secs = time.time() - agent_started
 
             self._state(run, "snapshotting")
             final = await env.snapshot(directory / "final.tar.gz")
-            tar_gz_to_zip(final, directory / "final.zip")
+            await asyncio.to_thread(tar_gz_to_zip, final, directory / "final.zip")
             final.unlink()
-        except InfraError:
+        except INFRA_ERRORS:
             await env.save_logs(directory / "env.log")
             raise
         finally:
             await env.down()
 
-        usage = (trajectory or {}).get("usage") or {}
-        self.store.update_run(
-            run.run_id,
-            agent_status=(trajectory or {}).get("status"),
-            tokens=usage.get("total_tokens"),
-            prompt_tokens=usage.get("prompt_tokens"),
-            completion_tokens=usage.get("completion_tokens"),
-            steps=len(usage.get("call_log") or []) or None,
-            duration_s=(trajectory or {}).get("time_elapsed"),
-        )
-        return classify_agent(trajectory)
+        trajectory = trajectory or {}
+        fields: dict[str, Any] = {
+            "agent_status": trajectory.get("status"),
+            # A killed or crashed agent writes no time_elapsed; use the clock.
+            "duration_s": trajectory.get("time_elapsed") or agent_secs,
+        }
+        # Without usage (killed at the wall clock, or crashed), keep the
+        # running totals counted from the event log.
+        if usage := trajectory.get("usage"):
+            fields.update(
+                tokens=usage.get("total_tokens"),
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                steps=len(usage.get("call_log") or []) or None,
+            )
+        self.store.update_run(run.run_id, **fields)
+        return classify_agent(trajectory or None)
 
     async def _run_agent(
         self, run: Run, port: int, directory: Path, number: int
@@ -359,9 +395,19 @@ class Worker:
                 self._emit(run, event.pop("kind"), **event)
 
         async with _tailing(log_path, on_line):
-            await _run_logged(cmd, GRADING_DIR, log_path, dict(os.environ), None)
-        grades = _read_json(grades_path)
-        outcome = classify_grading(grades)
+            code = await _run_logged(
+                cmd, GRADING_DIR, log_path, dict(os.environ),
+                timeout=self.grid.grading_timeout_sec,
+            )  # fmt: skip
+        if code is None:
+            # A hung judge call: rerun grading, not the agent.
+            outcome = Outcome(
+                Verdict.RERUN_GRADING,
+                f"grading killed after {self.grid.grading_timeout_sec}s",
+            )
+        else:
+            outcome = classify_grading(_read_json(grades_path))
+        grades = _read_json(grades_path) if outcome.verdict == Verdict.SCORED else None
         self.store.finish_attempt(attempt_id, outcome.verdict.value, outcome.reason)
         if outcome.verdict == Verdict.SCORED:
             self._emit(

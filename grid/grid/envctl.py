@@ -20,6 +20,11 @@ class InfraError(RuntimeError):
     """The environment, not the model, failed. The run is retried."""
 
 
+# Failures of the sandbox or the host rather than the model: a dropped or
+# timed-out connection to the sandbox, a full disk. All count as infra.
+INFRA_ERRORS = (InfraError, httpx.HTTPError, OSError)
+
+
 async def run_cmd(
     *args: str, cwd: Path | None = None, env: dict[str, str] | None = None
 ) -> tuple[int, str]:

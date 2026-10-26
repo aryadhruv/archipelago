@@ -14,6 +14,7 @@ Upstream is `Mercor-Intelligence/archipelago`. Its commits are automated syncs (
 - `examples/`: thin wrappers. `simple_task/main.py` runs populate → `/apps` → agent → snapshot → grading.
 - `docs/fork-changes.md`: what this fork changed relative to upstream (removed servers and verifiers, added settings, fixes). Update it with every change in behavior.
 - `docs/upstream-internals.md`: what upstream filtered out before publishing (agentic verifier, private packages, app servers), the Mercor services that stay dormant locally (Datadog, Redis, S3, LLM gateway, webhooks…), and what this fork removed. Check it before reviving any of them.
+- `docs/grid-analytics.md`: how each dashboard number is calculated and aggregated.
 - `docs/todo.md`: the fork's work list.
 
 ## Running locally

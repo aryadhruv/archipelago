@@ -105,10 +105,8 @@ class Scheduler:
                     task_id=run.task_id,
                     text=f"worker error: {e!r}",
                 )
-                self.store.update_run(
-                    run.run_id, state="retry", reason=f"worker error: {e!r}",
-                    not_before=time.time() + 60, port=None,
-                )  # fmt: skip
+                # Counted against max_attempts like any other failed attempt.
+                worker.worker_error(run.run_id, e)
             finally:
                 self._claimed.discard(run.run_id)
                 self._running[run.model_id] -= 1
