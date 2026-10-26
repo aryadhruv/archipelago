@@ -1,0 +1,49 @@
+{
+  "world_id": "world_team_inbox",
+  "files": [
+    {
+      "path": "/mail/inbox.mbox",
+      "size_bytes": 103024
+    },
+    {
+      "path": "/mail/sent.mbox",
+      "size_bytes": 374229
+    },
+    {
+      "path": "/calendar/team.ics",
+      "size_bytes": 6545
+    },
+    {
+      "path": "/calendar/rooms.ics",
+      "size_bytes": 388324
+    },
+    {
+      "path": "/chat/channels.json",
+      "size_bytes": 152355
+    },
+    {
+      "path": "/chat/threads/general.json",
+      "size_bytes": 133156
+    },
+    {
+      "path": "/chat/threads/launch.json",
+      "size_bytes": 195551
+    },
+    {
+      "path": "/docs/office_hours.md",
+      "size_bytes": 34466
+    },
+    {
+      "path": "/docs/travel_policy.pdf",
+      "size_bytes": 206392
+    },
+    {
+      "path": "/docs/offsite_ideas.docx",
+      "size_bytes": 204956
+    },
+    {
+      "path": "/docs/status_template.pptx",
+      "size_bytes": 309298
+    }
+  ]
+}

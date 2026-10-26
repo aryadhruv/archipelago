@@ -1,0 +1,29 @@
+{
+  "world_id": "world_club_records",
+  "files": [
+    {
+      "path": "/members/contacts.xlsx",
+      "size_bytes": 27462
+    },
+    {
+      "path": "/members/contacts_export_old.csv",
+      "size_bytes": 347467
+    },
+    {
+      "path": "/members/signup_forms.pdf",
+      "size_bytes": 150148
+    },
+    {
+      "path": "/members/style_guide.md",
+      "size_bytes": 333303
+    },
+    {
+      "path": "/newsletter/october.docx",
+      "size_bytes": 78474
+    },
+    {
+      "path": "/mail/club.mbox",
+      "size_bytes": 131117
+    }
+  ]
+}

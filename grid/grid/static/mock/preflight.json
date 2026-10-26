@@ -1,0 +1,48 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "id": "docker",
+      "label": "Docker daemon reachable",
+      "status": "pass",
+      "detail": "Docker 27.3 \u00b7 6 ports free (8080\u20138085)"
+    },
+    {
+      "id": "image",
+      "label": "Environment image present",
+      "status": "pass",
+      "detail": "archipelago-env:2026.10.24-3 (1.9 GB)"
+    },
+    {
+      "id": "provider_key",
+      "label": "Provider key present",
+      "status": "pass",
+      "detail": "OPENROUTER_API_KEY is set (value not shown)",
+      "present": true
+    },
+    {
+      "id": "context_windows",
+      "label": "Context windows set for every model",
+      "status": "warn",
+      "detail": "Model E has a 64k window; long tasks may compact often"
+    },
+    {
+      "id": "judge_independent",
+      "label": "Judge is not a model under test",
+      "status": "pass",
+      "detail": "openrouter/vendor-g/judge-model"
+    },
+    {
+      "id": "worlds_valid",
+      "label": "Worlds valid",
+      "status": "pass",
+      "detail": "4 worlds, 41 files, all apps resolvable"
+    },
+    {
+      "id": "tasks_resolve",
+      "label": "Tasks resolve to worlds and servers",
+      "status": "pass",
+      "detail": "8 tasks, 48 criteria"
+    }
+  ]
+}

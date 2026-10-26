@@ -1,0 +1,57 @@
+{
+  "state": "running",
+  "counts": {
+    "queued": 85,
+    "running": 6,
+    "retrying": 2,
+    "scored": 50,
+    "gave_up": 1
+  },
+  "started_at": "2026-10-25T09:00:00Z",
+  "elapsed_s": 2460,
+  "eta_s": 4485,
+  "tokens": {
+    "prompt": 1672060,
+    "completion": 125854
+  },
+  "attempts": 67,
+  "retries": 7,
+  "workers": [
+    {
+      "port": 8080,
+      "run_id": "r-0054",
+      "state": "agent_running",
+      "health": "ok"
+    },
+    {
+      "port": 8081,
+      "run_id": "r-0055",
+      "state": "agent_running",
+      "health": "ok"
+    },
+    {
+      "port": 8082,
+      "run_id": "r-0056",
+      "state": "grading",
+      "health": "ok"
+    },
+    {
+      "port": 8083,
+      "run_id": "r-0057",
+      "state": "apps_starting",
+      "health": "degraded"
+    },
+    {
+      "port": 8084,
+      "run_id": "r-0058",
+      "state": "agent_running",
+      "health": "ok"
+    },
+    {
+      "port": 8085,
+      "run_id": "r-0059",
+      "state": "populating",
+      "health": "ok"
+    }
+  ]
+}

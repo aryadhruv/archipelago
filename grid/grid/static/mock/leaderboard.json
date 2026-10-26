@@ -1,0 +1,431 @@
+{
+  "models": [
+    {
+      "model_id": "model_a",
+      "mean_score": 0.853,
+      "ci95": 0.087,
+      "pass_rate": 0.778,
+      "runs": 9,
+      "avg_tokens": 37137,
+      "avg_duration_s": 197,
+      "errors": 1,
+      "fails": 0,
+      "tool_profile": {
+        "toolbelt": 27,
+        "filesystem_server": 30,
+        "docs_server": 37,
+        "mail_server": 12,
+        "calendar_server": 15,
+        "sheets_server": 14,
+        "code_execution_server": 6,
+        "slides_server": 19,
+        "chat_server": 16,
+        "pdf_server": 12
+      }
+    },
+    {
+      "model_id": "model_b",
+      "mean_score": 0.778,
+      "ci95": 0.102,
+      "pass_rate": 0.556,
+      "runs": 9,
+      "avg_tokens": 31431,
+      "avg_duration_s": 137,
+      "errors": 1,
+      "fails": 0,
+      "tool_profile": {
+        "toolbelt": 27,
+        "filesystem_server": 33,
+        "docs_server": 34,
+        "mail_server": 2,
+        "calendar_server": 5,
+        "sheets_server": 13,
+        "code_execution_server": 4,
+        "slides_server": 15,
+        "chat_server": 14,
+        "pdf_server": 7
+      }
+    },
+    {
+      "model_id": "model_d",
+      "mean_score": 0.695,
+      "ci95": 0.07,
+      "pass_rate": 0.375,
+      "runs": 8,
+      "avg_tokens": 34977,
+      "avg_duration_s": 168,
+      "errors": 2,
+      "fails": 0,
+      "tool_profile": {
+        "toolbelt": 24,
+        "filesystem_server": 20,
+        "docs_server": 15,
+        "mail_server": 6,
+        "calendar_server": 10,
+        "sheets_server": 15,
+        "code_execution_server": 6,
+        "slides_server": 12,
+        "chat_server": 10
+      }
+    },
+    {
+      "model_id": "model_c",
+      "mean_score": 0.69,
+      "ci95": 0.1,
+      "pass_rate": 0.375,
+      "runs": 8,
+      "avg_tokens": 30910,
+      "avg_duration_s": 169,
+      "errors": 2,
+      "fails": 0,
+      "tool_profile": {
+        "toolbelt": 24,
+        "filesystem_server": 40,
+        "docs_server": 40,
+        "mail_server": 10,
+        "calendar_server": 10,
+        "sheets_server": 15,
+        "code_execution_server": 8,
+        "slides_server": 19,
+        "pdf_server": 7,
+        "chat_server": 11
+      }
+    },
+    {
+      "model_id": "model_e",
+      "mean_score": 0.619,
+      "ci95": 0.169,
+      "pass_rate": 0.333,
+      "runs": 9,
+      "avg_tokens": 32274,
+      "avg_duration_s": 240,
+      "errors": 2,
+      "fails": 1,
+      "tool_profile": {
+        "toolbelt": 27,
+        "filesystem_server": 32,
+        "docs_server": 36,
+        "mail_server": 2,
+        "calendar_server": 6,
+        "sheets_server": 11,
+        "code_execution_server": 6,
+        "slides_server": 11,
+        "chat_server": 9,
+        "pdf_server": 5
+      }
+    },
+    {
+      "model_id": "model_f",
+      "mean_score": 0.49,
+      "ci95": 0.112,
+      "pass_rate": 0.125,
+      "runs": 8,
+      "avg_tokens": 31620,
+      "avg_duration_s": 227,
+      "errors": 0,
+      "fails": 0,
+      "tool_profile": {
+        "toolbelt": 24,
+        "filesystem_server": 12,
+        "docs_server": 18,
+        "mail_server": 11,
+        "calendar_server": 17,
+        "sheets_server": 9,
+        "code_execution_server": 3,
+        "slides_server": 9,
+        "chat_server": 12,
+        "pdf_server": 6
+      }
+    }
+  ],
+  "matrix": [
+    {
+      "task_id": "organize_project_folder",
+      "model_id": "model_a",
+      "mean_score": 1.0,
+      "n": 2
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "model_id": "model_a",
+      "mean_score": 0.6,
+      "n": 1
+    },
+    {
+      "task_id": "chart_from_survey",
+      "model_id": "model_a",
+      "mean_score": 0.857,
+      "n": 1
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "model_id": "model_a",
+      "mean_score": 0.833,
+      "n": 1
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "model_id": "model_a",
+      "mean_score": 0.75,
+      "n": 1
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "model_id": "model_a",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "model_id": "model_a",
+      "mean_score": 0.833,
+      "n": 1
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "model_id": "model_a",
+      "mean_score": 1.0,
+      "n": 1
+    },
+    {
+      "task_id": "organize_project_folder",
+      "model_id": "model_b",
+      "mean_score": 1.0,
+      "n": 2
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "model_id": "model_b",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "chart_from_survey",
+      "model_id": "model_b",
+      "mean_score": 0.714,
+      "n": 1
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "model_id": "model_b",
+      "mean_score": 0.833,
+      "n": 1
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "model_id": "model_b",
+      "mean_score": 0.625,
+      "n": 1
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "model_id": "model_b",
+      "mean_score": 0.6,
+      "n": 1
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "model_id": "model_b",
+      "mean_score": 0.833,
+      "n": 1
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "model_id": "model_b",
+      "mean_score": 0.6,
+      "n": 1
+    },
+    {
+      "task_id": "organize_project_folder",
+      "model_id": "model_c",
+      "mean_score": 0.667,
+      "n": 2
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "model_id": "model_c",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "chart_from_survey",
+      "model_id": "model_c",
+      "mean_score": 0.714,
+      "n": 1
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "model_id": "model_c",
+      "mean_score": 0.833,
+      "n": 1
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "model_id": "model_c",
+      "mean_score": 0.375,
+      "n": 1
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "model_id": "model_c",
+      "mean_score": null,
+      "n": 0
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "model_id": "model_c",
+      "mean_score": 0.667,
+      "n": 1
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "model_id": "model_c",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "organize_project_folder",
+      "model_id": "model_d",
+      "mean_score": 0.75,
+      "n": 2
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "model_id": "model_d",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "chart_from_survey",
+      "model_id": "model_d",
+      "mean_score": 0.571,
+      "n": 1
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "model_id": "model_d",
+      "mean_score": 0.667,
+      "n": 1
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "model_id": "model_d",
+      "mean_score": 0.625,
+      "n": 1
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "model_id": "model_d",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "model_id": "model_d",
+      "mean_score": null,
+      "n": 0
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "model_id": "model_d",
+      "mean_score": 0.6,
+      "n": 1
+    },
+    {
+      "task_id": "organize_project_folder",
+      "model_id": "model_e",
+      "mean_score": 0.833,
+      "n": 2
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "model_id": "model_e",
+      "mean_score": 0.0,
+      "n": 1
+    },
+    {
+      "task_id": "chart_from_survey",
+      "model_id": "model_e",
+      "mean_score": 0.714,
+      "n": 1
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "model_id": "model_e",
+      "mean_score": 0.667,
+      "n": 1
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "model_id": "model_e",
+      "mean_score": 0.625,
+      "n": 1
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "model_id": "model_e",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "model_id": "model_e",
+      "mean_score": 0.5,
+      "n": 1
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "model_id": "model_e",
+      "mean_score": 0.6,
+      "n": 1
+    },
+    {
+      "task_id": "organize_project_folder",
+      "model_id": "model_f",
+      "mean_score": 0.5,
+      "n": 1
+    },
+    {
+      "task_id": "reply_scheduling_request",
+      "model_id": "model_f",
+      "mean_score": 0.6,
+      "n": 1
+    },
+    {
+      "task_id": "chart_from_survey",
+      "model_id": "model_f",
+      "mean_score": 0.286,
+      "n": 1
+    },
+    {
+      "task_id": "summarize_meeting_notes",
+      "model_id": "model_f",
+      "mean_score": 0.5,
+      "n": 1
+    },
+    {
+      "task_id": "clean_contacts_sheet",
+      "model_id": "model_f",
+      "mean_score": 0.5,
+      "n": 1
+    },
+    {
+      "task_id": "draft_offsite_agenda",
+      "model_id": "model_f",
+      "mean_score": 0.8,
+      "n": 1
+    },
+    {
+      "task_id": "compare_guide_versions",
+      "model_id": "model_f",
+      "mean_score": 0.333,
+      "n": 1
+    },
+    {
+      "task_id": "status_slides_from_chat",
+      "model_id": "model_f",
+      "mean_score": 0.4,
+      "n": 1
+    }
+  ]
+}
