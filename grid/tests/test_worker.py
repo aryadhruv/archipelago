@@ -43,12 +43,11 @@ def test_down_finishes_when_the_run_is_cancelled():
     env = Environment(8199, "image")
     calls: list[str] = []
 
-    async def compose(*args: str) -> tuple[int, str]:
-        await asyncio.sleep(0.2)
-        calls.append(args[0])
-        return 0, ""
+    def remove() -> None:
+        time.sleep(0.2)
+        calls.append("down")
 
-    env._compose = compose  # type: ignore[method-assign]
+    env._remove_self = remove  # type: ignore[method-assign]
 
     async def stop_mid_way() -> None:
         task = asyncio.create_task(env.down())

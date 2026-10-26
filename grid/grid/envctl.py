@@ -1,15 +1,20 @@
-"""Drive one environment container: compose up/down and the sandbox HTTP API."""
+"""Drive one environment container (Docker Engine API) and its sandbox HTTP API."""
 
 import asyncio
+import contextlib
 import hashlib
 import os
 import shutil
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+import docker
 import httpx
+from docker.errors import DockerException, ImageNotFound, NotFound
+from docker.models.containers import Container
 
 from grid.inputs import REPO_DIR
 
@@ -22,8 +27,9 @@ class InfraError(RuntimeError):
 
 
 # Failures of the sandbox or the host rather than the model: a dropped or
-# timed-out connection to the sandbox, a full disk. All count as infra.
-INFRA_ERRORS = (InfraError, httpx.HTTPError, OSError)
+# timed-out connection to the sandbox or to Docker, a full disk. All count as
+# infra.
+INFRA_ERRORS = (InfraError, httpx.HTTPError, DockerException, OSError)
 
 
 async def run_cmd(
@@ -41,9 +47,8 @@ async def run_cmd(
 
 
 def compose_env(port: int, image: str) -> dict[str, str]:
+    """The environment for `docker compose build` (the only compose call)."""
     env = dict(os.environ)
-    # It would override the per-port project name, so every environment would
-    # share one project and one run's `down` would stop the others.
     env.pop("COMPOSE_PROJECT_NAME", None)
     env["ENV_PORT"] = str(port)
     env["ENV_IMAGE"] = image
@@ -72,14 +77,24 @@ def port_is_free(port: int) -> bool:
     return True
 
 
-# Grid containers carry the owning process's pid in their compose project
-# name, so leftovers from a process that died can be told apart from those of
-# a grid still running. The trailing dash keeps pid 12 from matching 123.
-PROJECT_PREFIX = "archipelago-grid-"
+# Every grid container is labelled with the pid of the process that started
+# it, so leftovers from a process that died can be told apart from those of a
+# grid still running.
+OWNER_LABEL = "archipelago.grid.owner"
+CONTAINER_PORT = "8080/tcp"
+
+_client: docker.DockerClient | None = None
 
 
-def _owner_prefix(pid: int) -> str:
-    return f"{PROJECT_PREFIX}{pid}-"
+def client() -> docker.DockerClient:
+    """The Docker Engine API client (DOCKER_HOST, or the default socket)."""
+    global _client
+    if _client is None:
+        try:
+            _client = docker.from_env()
+        except DockerException as e:
+            raise InfraError(f"Can't reach Docker: {e}") from e
+    return _client
 
 
 def _pid_alive(pid: int) -> bool:
@@ -92,12 +107,31 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-async def _remove_containers(name_filter: str) -> list[str]:
-    _, out = await run_cmd("docker", "ps", "-aq", "--filter", f"name={name_filter}")
-    ids = out.split()
-    if ids:
-        await run_cmd("docker", "rm", "-f", "-v", *ids)
-    return ids
+def _remove(container: Container) -> None:
+    with contextlib.suppress(NotFound):
+        container.remove(force=True, v=True)
+
+
+def _remove_owned(pid: int) -> int:
+    containers = client().containers.list(
+        all=True, filters={"label": f"{OWNER_LABEL}={pid}"}
+    )
+    for container in containers:
+        _remove(container)
+    return len(containers)
+
+
+def _reap(own: bool) -> int:
+    owners = {
+        int(pid)
+        for c in client().containers.list(all=True, filters={"label": OWNER_LABEL})
+        if (pid := c.labels.get(OWNER_LABEL, "")).isdigit()
+    }
+    return sum(
+        _remove_owned(pid)
+        for pid in owners
+        if (own and pid == os.getpid()) or not _pid_alive(pid)
+    )
 
 
 async def reap(own: bool = False) -> int:
@@ -105,26 +139,30 @@ async def reap(own: bool = False) -> int:
 
     With `own`, also remove this process's own. Returns how many were removed.
     """
-    _, out = await run_cmd(
-        "docker",
-        "ps",
-        "-a",
-        "--filter",
-        f"name={PROJECT_PREFIX}",
-        "--format",
-        '{{.Label "com.docker.compose.project"}}',
-    )
-    owners = set()
-    for project in out.split():
-        pid, _, _ = project.removeprefix(PROJECT_PREFIX).partition("-")
-        if pid.isdigit():
-            owners.add(int(pid))
-    removed = 0
-    for pid in owners:
-        if (own and pid == os.getpid()) or not _pid_alive(pid):
-            removed += len(await _remove_containers(_owner_prefix(pid)))
-    return removed
+    return await asyncio.to_thread(_reap, own)
 
+
+# Run by the watchdog, a separate Python process: wait for the owner to exit,
+# then remove its containers.
+_WATCHDOG = """
+import os, sys, time
+import docker
+pid, label = int(sys.argv[1]), sys.argv[2]
+while True:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        break
+    except PermissionError:
+        pass
+    time.sleep(5)
+client = docker.from_env()
+for c in client.containers.list(all=True, filters={"label": f"{label}={pid}"}):
+    try:
+        c.remove(force=True, v=True)
+    except Exception:
+        pass
+"""
 
 _guarded = False
 
@@ -132,7 +170,7 @@ _guarded = False
 async def guard() -> None:
     """Once per process: clear dead grids' containers, and start a watchdog.
 
-    The watchdog is a detached shell that outlives this process. When this
+    The watchdog is a detached process that outlives this one. When this
     process exits by any means (a crash, SIGKILL, a closed terminal), it
     removes the containers this process left, so none keep running.
     """
@@ -141,14 +179,8 @@ async def guard() -> None:
         return
     _guarded = True
     await reap()
-    pid = os.getpid()
-    script = (
-        f"while kill -0 {pid} 2>/dev/null; do sleep 5; done; "
-        f"ids=$(docker ps -aq --filter name={_owner_prefix(pid)}); "
-        '[ -n "$ids" ] && docker rm -f -v $ids'
-    )
     subprocess.Popen(
-        ["sh", "-c", script],
+        [sys.executable, "-c", _WATCHDOG, str(os.getpid()), OWNER_LABEL],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -156,38 +188,65 @@ async def guard() -> None:
     )
 
 
+def env_file_values() -> dict[str, str]:
+    """environment/.env as KEY=VALUE pairs, the way compose's env_file reads it."""
+    values: dict[str, str] = {}
+    env_file = ENVIRONMENT_DIR / ".env"
+    if not env_file.exists():
+        return values
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
 class Environment:
     def __init__(self, port: int, image: str):
         self.port = port
         self.image = image
-        self.project = f"{_owner_prefix(os.getpid())}{port}"
+        self.name = f"archipelago-grid-{os.getpid()}-{port}"
         self.url = f"http://localhost:{port}"
+        self.container: Container | None = None
 
-    async def _compose(self, *args: str) -> tuple[int, str]:
-        return await run_cmd(
-            "docker",
-            "compose",
-            "-p",
-            self.project,
-            *args,
-            cwd=ENVIRONMENT_DIR,
-            env=compose_env(self.port, self.image),
+    def _start(self) -> Container:
+        containers = client().containers
+        # A container of this name is a leftover of this process's last run
+        # on the port.
+        with contextlib.suppress(NotFound):
+            _remove(containers.get(self.name))
+        return containers.run(
+            self.image,
+            name=self.name,
+            detach=True,
+            environment=env_file_values(),
+            # Loopback only: the sandbox API has no auth.
+            ports={CONTAINER_PORT: ("127.0.0.1", self.port)},
+            # The default bridge, not a network per container: Docker runs
+            # out of address pools after a few dozen networks.
+            network_mode="bridge",
+            labels={OWNER_LABEL: str(os.getpid())},
         )
 
     async def up(self, health_timeout: float = 180) -> None:
         await guard()
-        await self._compose("down", "-v")
-        code, out = await self._compose("up", "-d", "--no-build")
-        if code != 0:
-            raise InfraError(f"compose up failed on port {self.port}: {out[-2000:]}")
+        try:
+            self.container = await asyncio.to_thread(self._start)
+        except DockerException as e:
+            raise InfraError(f"container start failed on port {self.port}: {e}") from e
         await self._wait_healthy(health_timeout)
 
     async def _wait_healthy(self, timeout: float) -> None:
         deadline = asyncio.get_running_loop().time() + timeout
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=5) as http:
             while asyncio.get_running_loop().time() < deadline:
                 try:
-                    if (await client.get(f"{self.url}/health")).status_code == 200:
+                    if (await http.get(f"{self.url}/health")).status_code == 200:
                         return
                 except httpx.HTTPError:
                     pass
@@ -196,15 +255,17 @@ class Environment:
             f"environment on port {self.port} not healthy after {timeout:.0f}s"
         )
 
-    async def down(self) -> None:
-        # Shielded: a run cancelled mid-way (Stop, Ctrl+C) must still remove
-        # its container. If compose fails, remove it directly.
-        async def _down() -> None:
-            code, _ = await self._compose("down", "-v")
-            if code != 0:
-                await _remove_containers(f"{self.project}-")
+    def _remove_self(self) -> None:
+        if self.container is not None:
+            _remove(self.container)
+        else:
+            with contextlib.suppress(NotFound):
+                _remove(client().containers.get(self.name))
 
-        task = asyncio.ensure_future(_down())
+    async def down(self) -> None:
+        # The removal runs in a thread that a cancelled run (Stop, Ctrl+C)
+        # can't interrupt; wait for it before passing the cancel on.
+        task = asyncio.ensure_future(asyncio.to_thread(self._remove_self))
         try:
             await asyncio.shield(task)
         except asyncio.CancelledError:
@@ -212,8 +273,13 @@ class Environment:
             raise
 
     async def save_logs(self, path: Path) -> None:
-        _, out = await self._compose("logs", "--no-color")
-        path.write_text(out)
+        if self.container is None:
+            return
+        try:
+            out = await asyncio.to_thread(self.container.logs)
+        except DockerException as e:
+            out = f"could not read logs: {e}".encode()
+        path.write_bytes(out)
 
     async def populate(self, subsystem: str, tarball: Path) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=900) as client:
@@ -285,9 +351,21 @@ async def image_tag() -> str:
     return f"{IMAGE_REPO}:tree-{digest}{dirty}"
 
 
+def _image_id(image: str) -> str | None:
+    try:
+        return client().images.get(image).id
+    except ImageNotFound:
+        return None
+
+
 async def image_exists(image: str) -> bool:
-    code, _ = await run_cmd("docker", "image", "inspect", image)
-    return code == 0
+    return await asyncio.to_thread(_image_id, image) is not None
+
+
+def _remove_image(image_id: str) -> None:
+    # Kept if a container still uses it.
+    with contextlib.suppress(DockerException):
+        client().images.remove(image_id)
 
 
 async def ensure_image(image: str | None, rebuild: bool = False) -> str:
@@ -303,7 +381,7 @@ async def ensure_image(image: str | None, rebuild: bool = False) -> str:
         return tag
     if rebuild or tag.endswith("-dirty") or not await image_exists(tag):
         ensure_env_file()
-        _, previous = await run_cmd("docker", "image", "inspect", "-f", "{{.Id}}", tag)
+        previous = await asyncio.to_thread(_image_id, tag)
         code, out = await run_cmd(
             "docker",
             "compose",
@@ -316,10 +394,7 @@ async def ensure_image(image: str | None, rebuild: bool = False) -> str:
         if code != 0:
             raise InfraError(f"image build failed: {out[-3000:]}")
         # A rebuild moves the tag and leaves the old image untagged. The image
-        # is large, so repeated rebuilds would fill the disk. It's still kept
-        # if a container uses it.
-        _, current = await run_cmd("docker", "image", "inspect", "-f", "{{.Id}}", tag)
-        old = previous.strip()
-        if old.startswith("sha256:") and old != current.strip():
-            await run_cmd("docker", "image", "rm", old)
+        # is large, so repeated rebuilds would fill the disk.
+        if previous and previous != await asyncio.to_thread(_image_id, tag):
+            await asyncio.to_thread(_remove_image, previous)
     return tag

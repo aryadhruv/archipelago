@@ -80,7 +80,7 @@ Apply these in every grid.
 - **Code sandbox packages** (#3).
 - **Grid runner** (`grid/`). Runs tasks × models × repeats in parallel from
   inputs in the HF apex-agents layout: one image per grid tagged with the
-  commit, its own port and compose project per run, an output dir per attempt,
+  commit, its own port and container per run, an output dir per attempt,
   retries with backoff for infra errors, explicit context windows, and the
   errors-vs-fails rules (see `grid/README.md`). State is in SQLite, so a
   stopped grid resumes.
