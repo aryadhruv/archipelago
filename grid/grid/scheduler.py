@@ -50,6 +50,14 @@ class Scheduler:
         self._wake = asyncio.Event()
         self._running: dict[str, int] = {}  # model_id -> runs in flight
         self._claimed: set[str] = set()
+        # Paused: in-flight runs finish, no new ones start.
+        self.paused = False
+        self.ports: list[int] = []
+
+    def set_paused(self, paused: bool) -> None:
+        self.paused = paused
+        self.store.add_event("grid_state", state="paused" if paused else "running")
+        self._wake.set()
 
     def _model_has_room(self, model_id: str) -> bool:
         limit = self.grid.model(model_id).max_concurrency
@@ -71,6 +79,11 @@ class Scheduler:
 
     async def _worker_loop(self, worker: Worker, port: int) -> None:
         while True:
+            if self.paused:
+                self._wake.clear()
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._wake.wait(), timeout=5)
+                continue
             run, wait = self._next_run()
             if run is None:
                 if wait is None and not self._claimed:
@@ -85,7 +98,13 @@ class Scheduler:
                 await worker.execute(run, port)
             except Exception as e:  # a bug, not an outcome: don't take the pool down
                 self.log(f"{run.run_id}: worker error {e!r}")
-                self.store.add_event("infra", run.run_id, reason=f"worker error: {e!r}")
+                self.store.add_event(
+                    "infra",
+                    run.run_id,
+                    model_id=run.model_id,
+                    task_id=run.task_id,
+                    text=f"worker error: {e!r}",
+                )
                 self.store.update_run(
                     run.run_id, state="retry", reason=f"worker error: {e!r}",
                     not_before=time.time() + 60, port=None,
@@ -136,6 +155,8 @@ class Scheduler:
                 "Runs before and after aren't on the same build."
             )
         self.store.set_meta("manifest", manifest)
+        if self.store.get_meta("created_at") is None:
+            self.store.set_meta("created_at", time.time())
         (self.grid.grid_dir / "manifest.json").write_text(
             json.dumps(manifest, indent=2)
         )
@@ -150,7 +171,7 @@ class Scheduler:
 
         pending = len(self.store.runs(PENDING_STATES))
         count = max(1, min(self.grid.max_parallel, pending))
-        ports = allocate_ports(self.grid, count)
+        ports = self.ports = allocate_ports(self.grid, count)
         self.log(f"Starting {count} workers on ports {ports}")
         self.store.add_event("grid_state", state="running", ports=ports)
         try:

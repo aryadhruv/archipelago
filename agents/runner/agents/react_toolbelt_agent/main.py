@@ -250,6 +250,7 @@ class ReActAgent:
         # it: the projector's observation must pair the provider's
         # prompt_tokens with the estimate of exactly this list.
         sent_messages = self.messages
+        llm_started = time.monotonic()
         try:
             response: ModelResponse = await generate_response(
                 self.model,
@@ -282,6 +283,15 @@ class ReActAgent:
 
         counts = await asyncio.to_thread(self._usage_tracker.breakdown_counts, response)
         self._usage_tracker.track(response, counts)
+        usage = getattr(response, "usage", None)
+        # Per-call usage for live views; trajectory.json's call_log has the
+        # same numbers once the run ends.
+        logger.bind(
+            message_type="llm_usage",
+            prompt_tokens=getattr(usage, "prompt_tokens", None),
+            completion_tokens=getattr(usage, "completion_tokens", None),
+            latency_ms=round((time.monotonic() - llm_started) * 1000),
+        ).debug("LLM call usage")
         await asyncio.to_thread(
             self.resum.observe_llm_usage,
             sent_messages,

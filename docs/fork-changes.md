@@ -51,6 +51,15 @@ what we removed.
   `failed` (they count), and grades against a snapshot taken after the world
   and the task overlay are loaded. See `grid/README.md`.
 
+- **Per-call usage log in `react_toolbelt_agent`.** After each model call it
+  logs `message_type="llm_usage"` at DEBUG with `prompt_tokens`,
+  `completion_tokens` and `latency_ms`, so a live view can count tokens while
+  the run is going. `trajectory.json`'s `usage.call_log` has the same numbers
+  at the end.
+- **Dashboard API** (`grid serve`). REST and server-sent events over a grid's
+  `grid.db`, with start, pause, cancel, smoke test and retry. See
+  `grid/README.md`.
+
 ## Fixed
 
 - **`read_image_file`** detects PNG, JPEG, GIF and WebP from the file's bytes, not
