@@ -13,6 +13,7 @@ import sys
 import time
 from pathlib import Path
 
+from grid.envctl import reap
 from grid.inputs import InputError, load_grid
 from grid.preflight import run_preflight, summarize
 from grid.scheduler import Scheduler, grid_order
@@ -111,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("status", help="print each run's state")
     p.add_argument("config", type=Path)
 
+    sub.add_parser(
+        "clean", help="remove containers left by grid processes that have exited"
+    )
+
     p = sub.add_parser("serve", help="serve the dashboard and API")
     p.add_argument("config", type=Path)
     p.add_argument("--host", default="127.0.0.1")
@@ -128,6 +133,9 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_run(args))
         if args.command == "serve":
             return asyncio.run(_serve(args))
+        if args.command == "clean":
+            print(f"Removed {asyncio.run(reap())} containers")
+            return 0
         return _status(args)
     except InputError as e:
         print(f"Invalid grid: {e}", file=sys.stderr)

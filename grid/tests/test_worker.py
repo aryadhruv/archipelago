@@ -2,6 +2,9 @@ import asyncio
 import os
 import time
 
+import pytest
+
+from grid.envctl import Environment
 from grid.store import run_id_for
 from grid.worker import Worker, _run_logged
 
@@ -34,3 +37,25 @@ def test_worker_errors_count_against_max_attempts(setup):
     run = store.run(run_id)
     assert run.state == "gave_up"
     assert "worker error" in run.reason
+
+
+def test_down_finishes_when_the_run_is_cancelled():
+    env = Environment(8199, "image")
+    calls: list[str] = []
+
+    async def compose(*args: str) -> tuple[int, str]:
+        await asyncio.sleep(0.2)
+        calls.append(args[0])
+        return 0, ""
+
+    env._compose = compose  # type: ignore[method-assign]
+
+    async def stop_mid_way() -> None:
+        task = asyncio.create_task(env.down())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(stop_mid_way())
+    assert calls == ["down"]

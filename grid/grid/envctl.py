@@ -5,6 +5,7 @@ import hashlib
 import os
 import shutil
 import socket
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -71,11 +72,95 @@ def port_is_free(port: int) -> bool:
     return True
 
 
+# Grid containers carry the owning process's pid in their compose project
+# name, so leftovers from a process that died can be told apart from those of
+# a grid still running. The trailing dash keeps pid 12 from matching 123.
+PROJECT_PREFIX = "archipelago-grid-"
+
+
+def _owner_prefix(pid: int) -> str:
+    return f"{PROJECT_PREFIX}{pid}-"
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+async def _remove_containers(name_filter: str) -> list[str]:
+    _, out = await run_cmd("docker", "ps", "-aq", "--filter", f"name={name_filter}")
+    ids = out.split()
+    if ids:
+        await run_cmd("docker", "rm", "-f", "-v", *ids)
+    return ids
+
+
+async def reap(own: bool = False) -> int:
+    """Remove grid containers whose owning process is gone.
+
+    With `own`, also remove this process's own. Returns how many were removed.
+    """
+    _, out = await run_cmd(
+        "docker",
+        "ps",
+        "-a",
+        "--filter",
+        f"name={PROJECT_PREFIX}",
+        "--format",
+        '{{.Label "com.docker.compose.project"}}',
+    )
+    owners = set()
+    for project in out.split():
+        pid, _, _ = project.removeprefix(PROJECT_PREFIX).partition("-")
+        if pid.isdigit():
+            owners.add(int(pid))
+    removed = 0
+    for pid in owners:
+        if (own and pid == os.getpid()) or not _pid_alive(pid):
+            removed += len(await _remove_containers(_owner_prefix(pid)))
+    return removed
+
+
+_guarded = False
+
+
+async def guard() -> None:
+    """Once per process: clear dead grids' containers, and start a watchdog.
+
+    The watchdog is a detached shell that outlives this process. When this
+    process exits by any means (a crash, SIGKILL, a closed terminal), it
+    removes the containers this process left, so none keep running.
+    """
+    global _guarded
+    if _guarded:
+        return
+    _guarded = True
+    await reap()
+    pid = os.getpid()
+    script = (
+        f"while kill -0 {pid} 2>/dev/null; do sleep 5; done; "
+        f"ids=$(docker ps -aq --filter name={_owner_prefix(pid)}); "
+        '[ -n "$ids" ] && docker rm -f -v $ids'
+    )
+    subprocess.Popen(
+        ["sh", "-c", script],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
 class Environment:
     def __init__(self, port: int, image: str):
         self.port = port
         self.image = image
-        self.project = f"archipelago-{port}"
+        self.project = f"{_owner_prefix(os.getpid())}{port}"
         self.url = f"http://localhost:{port}"
 
     async def _compose(self, *args: str) -> tuple[int, str]:
@@ -90,6 +175,7 @@ class Environment:
         )
 
     async def up(self, health_timeout: float = 180) -> None:
+        await guard()
         await self._compose("down", "-v")
         code, out = await self._compose("up", "-d", "--no-build")
         if code != 0:
@@ -111,7 +197,19 @@ class Environment:
         )
 
     async def down(self) -> None:
-        await self._compose("down", "-v")
+        # Shielded: a run cancelled mid-way (Stop, Ctrl+C) must still remove
+        # its container. If compose fails, remove it directly.
+        async def _down() -> None:
+            code, _ = await self._compose("down", "-v")
+            if code != 0:
+                await _remove_containers(f"{self.project}-")
+
+        task = asyncio.ensure_future(_down())
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await task
+            raise
 
     async def save_logs(self, path: Path) -> None:
         _, out = await self._compose("logs", "--no-color")
@@ -205,6 +303,7 @@ async def ensure_image(image: str | None, rebuild: bool = False) -> str:
         return tag
     if rebuild or tag.endswith("-dirty") or not await image_exists(tag):
         ensure_env_file()
+        _, previous = await run_cmd("docker", "image", "inspect", "-f", "{{.Id}}", tag)
         code, out = await run_cmd(
             "docker",
             "compose",
@@ -216,4 +315,11 @@ async def ensure_image(image: str | None, rebuild: bool = False) -> str:
         )
         if code != 0:
             raise InfraError(f"image build failed: {out[-3000:]}")
+        # A rebuild moves the tag and leaves the old image untagged. The image
+        # is large, so repeated rebuilds would fill the disk. It's still kept
+        # if a container uses it.
+        _, current = await run_cmd("docker", "image", "inspect", "-f", "{{.Id}}", tag)
+        old = previous.strip()
+        if old.startswith("sha256:") and old != current.strip():
+            await run_cmd("docker", "image", "rm", old)
     return tag

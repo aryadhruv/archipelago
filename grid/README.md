@@ -77,8 +77,8 @@ primary objective.
 
 ## What a run does
 
-1. Start the environment on its own port (`docker compose -p archipelago-<port>`,
-   `--no-build`, the grid's image).
+1. Start the environment on its own port (`docker compose -p
+   archipelago-grid-<pid>-<port>`, `--no-build`, the grid's image).
 2. Populate the world, then the task overlay. Snapshot that state as
    `initial.zip`: grading compares the final state against it.
 3. `POST /apps` with the MCP config.
@@ -100,8 +100,24 @@ Errors are told from fails like this:
 The image is built once per grid and tagged after the git trees it's built
 from (`archipelago-environment:tree-<hash>` of `environment/` and
 `mcp_servers/`), so commits that don't touch them reuse it. Uncommitted changes
-there give a `-dirty` tag, rebuilt on each `run`. `manifest.json` records the
-image and the commit.
+there give a `-dirty` tag, rebuilt on each `run`; the image a rebuild replaces
+is removed. `manifest.json` records the image and the commit.
+
+### Container cleanup
+
+Every container a grid starts is removed, however the grid ends:
+- **A run that finishes, fails or is stopped** removes its own container, even
+  when Stop or Ctrl+C lands mid-teardown.
+- **A grid that stops** then removes any of its containers that are left.
+- **A grid process that dies** (a crash, `kill -9`, a closed terminal) is
+  covered by a watchdog. It's a small detached shell started with the first
+  environment. It removes that process's containers within about 5 seconds of
+  the process exiting.
+- **On start**, a grid removes containers left by grid processes that are no
+  longer running. `python -m grid clean` does the same on demand.
+
+Containers are named after the process that started them (`<pid>` above), so
+a grid never removes another live grid's containers.
 
 ## Output
 
