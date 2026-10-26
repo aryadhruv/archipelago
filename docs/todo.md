@@ -7,46 +7,14 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Build
 
-1. **Grid runner.** One driver that calls the three entry points (environment,
-   agent, grading) directly with per-run arguments for the model × task × repeat
-   grid, instead of copying an example's `main.py` for each task. It must:
-   - **Pin one build.** Build once, tag the image with the git SHA, and start
-     every worker with `ENV_IMAGE=<that tag>` and `up -d --no-build`. A
-     `--build` mid-grid retags `:local`, and later workers would run different
-     code from earlier ones. The examples always pass `--build` (unless
-     `ENV_IMAGE` is set), so don't drive the grid through them.
-   - **Own the ports.** Allocate ports itself, and pass `-p archipelago-<port>`
-     explicitly with `COMPOSE_PROJECT_NAME` unset (it overrides the per-port
-     name, as does a port set in `environment/.env`). Two runs on the same
-     project share one container, and one run's `down -v` kills the other.
-   - **Separate outputs.** Give each run its own output dir. simple_task writes
-     everything (including its `original_snapshot.tar.gz` conversion) into the
-     example folder, and hugging_face_task writes to `output/<task_id>`, which
-     collides across models and repeats of the same task.
-   - **Retry infra failures.** Treat a `POST /apps` 503 (MCP servers not ready
-     in about 5 minutes) as infra and retry. Many workers starting at once can
-     push startup past the limit. Containers sit on Docker's default bridge;
-     one network per project ran out of address pools at about 27 workers.
-   - **Set context windows.** Set `CONTEXT_WINDOW_FALLBACK_ENABLED=false` and
-     pass `context_window_tokens` for every model, checking this before
-     launch. Every `openrouter/...` model misses the window table, and an agent
-     that raises ends as `status: error`, which the rule below would retry
-     forever.
-   - **Tell errors from fails:**
-     - Grading: a verifier that raises or returns `status: error` (judge API
-       failure, auth error) makes the whole run `grading_run_status: error`
-       with `final_score: null`, after judge calls have retried transient
-       errors 5 times. Rerun grading; never record a score.
-     - Agent `status: failed` is the model's fault (steps or output budget
-       exhausted, context overflow, bad request). Grade it and count it.
-     - Agent `status: error` is infra (rate limit, 5xx, connection, MCP
-       timeout). Rerun it, unless `fault` is
-       `{"kind": "budget_exhausted", "budget": "wall_clock"}`: that is a
-       timeout, which counts as a fail (score 0).
-     - Agent `status: cancelled` means the run was torn down externally. Rerun
-       it.
+1. **Dashboard.** A live view of a grid, served by the grid runner: an event
+   stream from each run's `agent_events.jsonl` and grading output, a REST + SSE
+   API over `grid.db`, and a plain JavaScript/HTML/CSS frontend (setup and
+   preflight, progress matrix, run detail, a live map of tool calls, infra
+   log). Builds on the grid runner.
 2. **Leaderboard.** Combine `trajectory.json` (steps and token usage) and
-   `grades.json` across runs. Builds on the grid runner's output layout.
+   `grades.json` across runs (`grid.db` has each run's score, tokens and
+   steps). Part of the dashboard.
 3. **Sub-agents.** `agents/runner/utils/subagent.py::spawn_subagent()` exists,
    but nothing calls it and no harness exposes it as a tool. To allow
    delegation, add a `delegate(task, context)` tool to `react_toolbelt_agent`.
@@ -93,7 +61,7 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Fairness rules
 
-Apply these once the grid runner exists.
+Apply these in every grid.
 
 - Use the same harness, `max_steps`, timeout and tool set for every model.
   Count a timeout as a fail.
@@ -118,6 +86,12 @@ Apply these once the grid runner exists.
 - **Env loading.** Each runner loads its own `.env` and exits early if the
   model's provider key is missing (#2).
 - **Code sandbox packages** (#3).
+- **Grid runner** (`grid/`). Runs tasks × models × repeats in parallel from
+  inputs in the HF apex-agents layout: one image per grid tagged with the
+  commit, its own port and compose project per run, an output dir per attempt,
+  retries with backoff for infra errors, explicit context windows, and the
+  errors-vs-fails rules (see `grid/README.md`). State is in SQLite, so a
+  stopped grid resumes.
 - **Parallel runs.** One environment per port (`archipelago-<port>`),
   `ENV_IMAGE` pinning, default bridge network (#4). The examples remove an
   old-layout container before starting on port 8080 (#5).
