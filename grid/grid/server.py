@@ -159,6 +159,16 @@ class Smoke:
         }
 
 
+class _RevalidatedStatic(StaticFiles):
+    """Static files the browser must revalidate, so an updated UI loads
+    without a hard reload (unchanged files still come back as 304)."""
+
+    def file_response(self, *args: Any, **kwargs: Any):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def _attempt_file(store: Store, run_id: str, name: str) -> Path:
     try:
         run = store.run(run_id)
@@ -389,7 +399,9 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
         )
 
     if STATIC_DIR.is_dir():
-        app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+        app.mount(
+            "/", _RevalidatedStatic(directory=STATIC_DIR, html=True), name="static"
+        )
     return app
 
 

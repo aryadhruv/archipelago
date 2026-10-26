@@ -129,3 +129,10 @@ def test_final_answer_from_the_tool_message():
     assert final_answer(trajectory) == "It's at /a.png"
     assert final_answer({"final_answer": "Direct."}) == "Direct."
     assert final_answer(None) is None
+
+
+def test_ui_is_served_with_revalidation(setup):
+    _, _, client = setup
+    page = client.get("/")
+    assert page.status_code == 200 and "Archipelago" in page.text
+    assert client.get("/css/app.css").headers["cache-control"] == "no-cache"

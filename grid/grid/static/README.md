@@ -1,4 +1,4 @@
-# Grid dashboard
+# Archipelago dashboard
 
 The grid runner's dashboard. A grid runs every task on every model, several
 times. Each run starts a Docker sandbox, loads a world of files, lets an agent

@@ -91,6 +91,7 @@ function paintIndicator(summary) {
     return;
   }
   document.getElementById('grid-id').textContent = store.grid.grid_id;
+  document.title = `Archipelago · ${store.grid.grid_id}`;
   paintIndicator(store.summary);
   on('summary', paintIndicator);
   goLive();
