@@ -69,14 +69,19 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `env_image` | built from the checked-out `environment/` and `mcp_servers/` | Pin an existing image |
 | `output_dir` | `runs` | |
 | `pass_score` | 1.0 | The score a run needs to count as a pass on the leaderboard |
+| `agent_grace_sec` | 600 | Seconds past the agent's own wall clock before the grid kills it (scored as a timeout) |
+| `grading_timeout_sec` | 3600 | Seconds before the grid kills a grading attempt and reruns grading |
 
 Each rubric criterion becomes one `output_llm` verifier. The first one is the
 primary objective.
 
 ## What a run does
 
-1. Start the environment on its own port (`docker compose -p archipelago-<port>`,
-   `--no-build`, the grid's image).
+1. Start the environment container on its own port, through the Docker Engine
+   API (the `docker` Python package): the grid's image, named
+   `archipelago-grid-<pid>-<port>`, bound to 127.0.0.1 only. Only the image
+   build goes through the CLI (`docker compose build`), since it needs
+   BuildKit.
 2. Populate the world, then the task overlay. Snapshot that state as
    `initial.zip`: grading compares the final state against it.
 3. `POST /apps` with the MCP config.
@@ -90,15 +95,33 @@ Errors are told from fails like this:
 |---|---|
 | Agent `completed` or `failed` | Graded and counted |
 | Agent `error` with a wall-clock fault | Counted as a fail, score 0 |
-| Any other agent `error`, `cancelled`, infra failure (`/apps` 503, Docker) | Agent rerun, with backoff |
+| Any other agent `error`, `cancelled`, infra failure (`/apps` 503, Docker, a dropped sandbox connection, a full disk) or an unexpected worker error | Agent rerun, with backoff |
 | Grading not `completed` with a score (a verifier raised or errored, e.g. a judge API or auth failure, after the judge's own 5 retries) | Grading rerun on the same trajectory and snapshots; no score is recorded |
+| Grading killed at `grading_timeout_sec` | Grading rerun |
 | `max_attempts` used | `gave_up` |
 
 The image is built once per grid and tagged after the git trees it's built
 from (`archipelago-environment:tree-<hash>` of `environment/` and
 `mcp_servers/`), so commits that don't touch them reuse it. Uncommitted changes
-there give a `-dirty` tag, rebuilt on each `run`. `manifest.json` records the
-image and the commit.
+there give a `-dirty` tag, rebuilt on each `run`; the image a rebuild replaces
+is removed. `manifest.json` records the image and the commit.
+
+### Container cleanup
+
+Every container a grid starts is removed, however the grid ends:
+- **A run that finishes, fails or is stopped** removes its own container, even
+  when Stop or Ctrl+C lands mid-teardown.
+- **A grid that stops** then removes any of its containers that are left.
+- **A grid process that dies** (a crash, `kill -9`, a closed terminal) is
+  covered by a watchdog. It's a small detached Python process started with the
+  first environment. It removes that process's containers within about 5 seconds of
+  the process exiting.
+- **On start**, a grid removes containers left by grid processes that are no
+  longer running. `python -m grid clean` does the same on demand.
+
+Containers carry the pid of the process that started them (the
+`archipelago.grid.owner` label), so a grid never removes another live grid's
+containers.
 
 ## Output
 
@@ -179,3 +202,6 @@ the model. Runs that gave up after `max_attempts` infra or grading errors are
 left out of the score and reported as `gave_up`, and `errors` counts the extra
 attempts, so a flaky provider is visible without lowering the score. A run
 passes at `pass_score`.
+
+How every dashboard number is calculated and aggregated, with its caveats:
+[`docs/grid-analytics.md`](../docs/grid-analytics.md).

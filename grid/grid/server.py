@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 from grid import views
@@ -399,6 +404,16 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
         )
 
     if STATIC_DIR.is_dir():
+
+        @app.get("/demo", include_in_schema=False)
+        def demo_slash() -> RedirectResponse:
+            return RedirectResponse("/demo/")
+
+        # The same UI on fixture data and a simulator, for showing the
+        # dashboard while a real grid runs. The page picks its mode by path.
+        app.mount(
+            "/demo", _RevalidatedStatic(directory=STATIC_DIR, html=True), name="demo"
+        )
         app.mount(
             "/", _RevalidatedStatic(directory=STATIC_DIR, html=True), name="static"
         )

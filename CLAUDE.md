@@ -14,6 +14,7 @@ Upstream is `Mercor-Intelligence/archipelago`. Its commits are automated syncs (
 - `examples/`: thin wrappers. `simple_task/main.py` runs populate → `/apps` → agent → snapshot → grading.
 - `docs/fork-changes.md`: what this fork changed relative to upstream (removed servers and verifiers, added settings, fixes). Update it with every change in behavior.
 - `docs/upstream-internals.md`: what upstream filtered out before publishing (agentic verifier, private packages, app servers), the Mercor services that stay dormant locally (Datadog, Redis, S3, LLM gateway, webhooks…), and what this fork removed. Check it before reviving any of them.
+- `docs/grid-analytics.md`: how each dashboard number is calculated and aggregated.
 - `docs/todo.md`: the fork's work list.
 
 ## Running locally
@@ -23,7 +24,7 @@ Upstream is `Mercor-Intelligence/archipelago`. Its commits are automated syncs (
 cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 ```
 
-- Use uv 0.13.4 or newer. Older versions can't parse `exclude-newer = "7 days"`. Always use `uv sync --locked`. An unlocked sync pulls a newer `mcp` that breaks `from mcp import McpError`.
+- Always use `uv sync --locked`: the lockfiles pin every dependency, and this fork dropped upstream's `exclude-newer` cutoffs. The image pins uv 0.13.4. An unlocked sync pulls a newer `mcp` that breaks `from mcp import McpError`.
 - Model strings look like `openrouter/anthropic/claude-sonnet-5.5`. The judge is set in `grading_settings.json` with `llm_judge_model`.
 - `mcp_config.json` needs the server's own venv Python (`/app/mcp_servers/<server>/.venv/bin/python`) and `MCP_TRANSPORT=stdio`. Without it you get `ModuleNotFoundError: mcp_schema`, or the server starts over HTTP on :5000.
 - With `ENV=local` and the env vars unset, Mercor-internal code paths are inactive: the LLM gateway, Mercor's document cache, cost ledgers, Datadog, Redis, Modal and webhooks.

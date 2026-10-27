@@ -6,9 +6,11 @@ work through MCP tool servers, and then grades the result against the task's
 rubric.
 
 `python -m grid serve <grid.json>` serves this folder at `/` together with the
-API. Served on its own, it runs on the fixtures in `mock/` and a scripted
-simulator (`js/mock_stream.js`), which is handy for working on the UI without
-Docker or model calls. The fixtures double as the API contract: `grid/tests/
+API, and again at `/demo/`, where it runs on the fixtures in `mock/` and a
+scripted simulator (`js/mock_stream.js`). The demo is for showing the dashboard
+while a real grid runs, and for working on the UI without Docker or model
+calls. The mode follows the path only: if the API fails at `/`, the page shows
+the error, never the demo data. The fixtures double as the API contract: `grid/tests/
 test_contract.py` checks that the API serves every field they have.
 
 Plain HTML, CSS and ES modules. No libraries, no CDN, no build step.
@@ -16,19 +18,14 @@ Plain HTML, CSS and ES modules. No libraries, no CDN, no build step.
 ## Open it
 
 ```bash
-cd grid && uv run --locked python -m grid serve path/to/grid.json   # real data: http://127.0.0.1:7070/
-python3 -m http.server -d grid/grid/static 7001                     # mock data: http://localhost:7001/
+cd grid && uv run --locked python -m grid serve path/to/grid.json
+# real data: http://127.0.0.1:7070/
+# demo data: http://127.0.0.1:7070/demo/
 ```
 
-It must be served over HTTP: browsers block ES modules and `fetch` on `file://`.
+URL option:
 
-URL options:
-
-- No option: use the API if the page's origin serves one (`GET /api/summary`
-  answers with JSON), otherwise the fixtures and the simulator.
-- `?mock=1`: always the fixtures and the simulator.
-- `?mock=0`: always the API.
-- `&api=http://host:port`: call an API on another origin. The API doesn't
+- `?api=http://host:port`: call an API on another origin. The API doesn't
   send CORS headers, so this works only through a proxy that adds them.
 
 ## Screens
@@ -43,7 +40,7 @@ URL options:
 | `#/infra` | Infra / Logs | Filterable table of infra events, retries, give-ups and their classifications; the worker/port list. |
 
 The top bar has the grid ID, a live indicator (Not started, Live, Paused,
-Finished), a "Mock data" badge in mock mode, and a dark/light toggle (dark by
+Finished), a "Demo data" badge under `/demo/`, and a dark/light toggle (dark by
 default; the choice is kept in `localStorage`).
 
 ### Mock behaviour
@@ -165,7 +162,7 @@ index.html            shell: top bar, <main id="view">
 css/app.css           design tokens (dark default, light theme), layout, components
 js/app.js             hash router, theme toggle, live indicator
 js/api.js             data layer (mock fixtures or real API)
-js/mock_stream.js     simulator for mock mode
+js/mock_stream.js     simulator for the demo
 js/store.js           shared client state: grid, summary, runs, event ring buffer
 js/util.js            DOM helpers, formatting, colors, icons, tooltip
 js/charts.js          SVG charts: stacked bars, scatter, CI mark

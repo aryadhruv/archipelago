@@ -1,9 +1,12 @@
 """Checks to pass before launching a grid. Each is pass, warn or fail."""
 
+import asyncio
 import zipfile
 from dataclasses import asdict, dataclass
 
-from grid.envctl import run_cmd
+from docker.errors import DockerException
+
+from grid.envctl import InfraError, client, run_cmd
 from grid.inputs import Grid
 from grid.worker import AGENTS_DIR, GRADING_DIR
 
@@ -108,15 +111,11 @@ async def _key_check(id_: str, label: str, cwd, models: list[str]) -> Check:
 async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
     checks = _inputs_checks(grid) + _model_checks(grid)
 
-    code, out = await run_cmd("docker", "info", "--format", "{{.ServerVersion}}")
-    checks.append(
-        Check(
-            "docker",
-            "Docker is running",
-            "pass" if code == 0 else "fail",
-            out.strip()[-300:] if code else f"server {out.strip()}",
-        )
-    )
+    try:
+        version = (await asyncio.to_thread(lambda: client().version()))["Version"]
+        checks.append(Check("docker", "Docker is running", "pass", f"server {version}"))
+    except (InfraError, DockerException) as e:
+        checks.append(Check("docker", "Docker is running", "fail", str(e)[-300:]))
 
     if check_keys:
         checks.append(

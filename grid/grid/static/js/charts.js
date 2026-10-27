@@ -100,7 +100,9 @@ export function scatter(points, { xTitle, yTitle, xFormat = (v) => v, yFormat = 
   }
   for (const { p, lx, ly } of placed) {
     const g = s('g');
-    g.append(s('circle', { class: 'mark-ring', cx: X(p.x), cy: Y(p.y), r: 6, fill: p.color }));
+    g.append(p.alt
+      ? s('circle', { cx: X(p.x), cy: Y(p.y), r: 5, fill: 'var(--surface-1)', stroke: p.color, 'stroke-width': 2.5 })
+      : s('circle', { class: 'mark-ring', cx: X(p.x), cy: Y(p.y), r: 6, fill: p.color }));
     g.append(s('text', { class: 'dlabel', x: lx, y: ly }, p.label));
     const hit = s('circle', { class: 'hit', cx: X(p.x), cy: Y(p.y), r: 14 });
     hover(hit, () => tipBody(p.label, p.tip || [], p.color));
@@ -111,7 +113,7 @@ export function scatter(points, { xTitle, yTitle, xFormat = (v) => v, yFormat = 
 }
 
 /** Inline mean ± CI dot-and-whisker on a 0..1 scale. */
-export function ciMark(mean, ci, color, w = 120) {
+export function ciMark(mean, ci, color, w = 120, alt = false) {
   const H = 14, X = (v) => 4 + Math.max(0, Math.min(1, v)) * (w - 8);
   const svg = s('svg', { width: w, height: H, viewBox: `0 0 ${w} ${H}`, 'aria-hidden': 'true' });
   svg.append(s('line', { x1: 4, x2: w - 4, y1: H / 2, y2: H / 2, stroke: 'var(--grid-line)', 'stroke-width': 1 }));
@@ -119,7 +121,9 @@ export function ciMark(mean, ci, color, w = 120) {
     svg.append(s('line', { x1: X(mean - ci), x2: X(mean + ci), y1: H / 2, y2: H / 2, stroke: 'var(--text-2)', 'stroke-width': 2, 'stroke-linecap': 'round' }));
   }
   if (mean === null || mean === undefined) return svg; // no scored runs yet
-  svg.append(s('circle', { cx: X(mean), cy: H / 2, r: 4.5, fill: color, stroke: 'var(--surface-1)', 'stroke-width': 2 }));
+  svg.append(alt
+    ? s('circle', { cx: X(mean), cy: H / 2, r: 3.5, fill: 'var(--surface-1)', stroke: color, 'stroke-width': 2 })
+    : s('circle', { cx: X(mean), cy: H / 2, r: 4.5, fill: color, stroke: 'var(--surface-1)', 'stroke-width': 2 }));
   return svg;
 }
 

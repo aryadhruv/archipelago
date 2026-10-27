@@ -42,7 +42,7 @@ This quick start walks you through running a single task end-to-end using the pr
 
 - Docker Desktop
 - Python 3.13
-- UV 0.13.4 or newer (older versions can't parse `exclude-newer = "7 days"`). Install with `uv sync --locked`, never a plain `uv sync`.
+- UV. Install with `uv sync --locked`, never a plain `uv sync`: the lockfiles pin every dependency.
 - LLM API key (Anthropic, OpenAI, Gemini or OpenRouter)
 
 ### 1. Set Up Environment Variables

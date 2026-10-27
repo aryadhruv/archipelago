@@ -120,6 +120,6 @@ def tar_gz_to_zip(tar_gz_path: Path, zip_path: Path) -> Path:
             src = tar.extractfile(member)
             if src is None:
                 continue
-            with src, zf.open(member.name, "w") as dst:
+            with src, zf.open(member.name, "w", force_zip64=True) as dst:
                 shutil.copyfileobj(src, dst, 1 << 20)
     return zip_path

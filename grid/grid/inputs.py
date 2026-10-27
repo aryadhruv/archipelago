@@ -68,6 +68,8 @@ class Grid:
     env_image: str | None = None
     # Seconds past the harness's own wall clock before the grid kills the agent.
     agent_grace_sec: int = 600
+    # Seconds before the grid kills a grading attempt and reruns grading.
+    grading_timeout_sec: int = 3600
     # The score a run needs to count as a pass on the leaderboard.
     pass_score: float = 1.0
     world_ids: list[str] = field(default_factory=list)
@@ -208,6 +210,7 @@ def load_grid(config_path: Path) -> Grid:
         ),
         env_image=cfg.get("env_image"),
         agent_grace_sec=int(cfg.get("agent_grace_sec", 600)),
+        grading_timeout_sec=int(cfg.get("grading_timeout_sec", 3600)),
         pass_score=float(cfg.get("pass_score", 1.0)),
     )
     grid.world_ids = sorted({t.world_id for t in tasks})

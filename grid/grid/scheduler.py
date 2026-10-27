@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from grid.envctl import ensure_env_file, ensure_image, git_sha, port_is_free
+from grid.envctl import ensure_env_file, ensure_image, git_sha, port_is_free, reap
 from grid.inputs import Grid
 from grid.store import PENDING_STATES, Run, Store
 from grid.worker import Worker
@@ -105,10 +105,8 @@ class Scheduler:
                     task_id=run.task_id,
                     text=f"worker error: {e!r}",
                 )
-                self.store.update_run(
-                    run.run_id, state="retry", reason=f"worker error: {e!r}",
-                    not_before=time.time() + 60, port=None,
-                )  # fmt: skip
+                # Counted against max_attempts like any other failed attempt.
+                worker.worker_error(run.run_id, e)
             finally:
                 self._claimed.discard(run.run_id)
                 self._running[run.model_id] -= 1
@@ -177,6 +175,9 @@ class Scheduler:
         try:
             await asyncio.gather(*(self._worker_loop(worker, p) for p in ports))
         finally:
+            # Each run removes its own container; this catches any that
+            # failed to go.
+            await reap(own=True)
             self.store.add_event(
                 "grid_state", state="stopped", counts=self.store.counts()
             )

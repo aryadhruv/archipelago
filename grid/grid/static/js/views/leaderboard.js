@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { store, taskById } from '../store.js';
 import {
   h, icon, clear, fmtScore, fmtPct, fmtTokens, fmtDuration, fmtInt, modelColor, modelLabel, modelById,
-  scoreColor, scoreInk, SERVERS, tip, tipBody, download, emptyState,
+  scoreColor, scoreInk, SERVERS, tip, tipBody, download, emptyState, modelSwatch, modelFill, modelAlt,
 } from '../util.js';
 import { scatter, ciMark } from '../charts.js';
 
@@ -51,7 +51,7 @@ export function render(root) {
 
 function point(m, x) {
   return {
-    x, y: m.mean_score, label: modelLabel(m.model_id), color: modelColor(m.model_id),
+    x, y: m.mean_score, label: modelLabel(m.model_id), color: modelColor(m.model_id), alt: modelAlt(m.model_id),
     tip: [['Mean score', fmtScore(m.mean_score)], ['± 95% CI', m.ci95 === null ? '–' : fmtScore(m.ci95)], ['Avg tokens', fmtTokens(m.avg_tokens)],
       ['Avg duration', fmtDuration(m.avg_duration_s)], ['Runs', fmtInt(m.runs)]],
   };
@@ -67,12 +67,12 @@ function rankTable(data) {
       h('th', { class: 'num', title: 'Agent failed or timed out; scored against the model' }, 'Fails'))),
     h('tbody', null, data.models.map((m, i) => {
       const md = modelById(m.model_id);
-      const ci = h('span', { class: 'ci' }, ciMark(m.mean_score, m.ci95, modelColor(m.model_id), 140),
+      const ci = h('span', { class: 'ci' }, ciMark(m.mean_score, m.ci95, modelColor(m.model_id), 140, modelAlt(m.model_id)),
         h('b', { class: 'num' }, fmtScore(m.mean_score)), h('span', { class: 'muted num' }, m.ci95 === null ? '' : `± ${fmtScore(m.ci95)}`));
-      tip(ci, () => tipBody(md.label, [['Mean', fmtScore(m.mean_score)], ['95% CI', m.ci95 === null ? '–' : `${fmtScore(m.mean_score - m.ci95)} – ${fmtScore(m.mean_score + m.ci95)}`], ['Runs', String(m.runs)]], modelColor(m.model_id)));
+      tip(ci, () => tipBody(md.label, [['Mean', fmtScore(m.mean_score)], ['95% CI', m.ci95 === null ? '–' : `${fmtScore(m.mean_score - m.ci95)} – ${fmtScore(m.mean_score + m.ci95)}`], ['Runs', String(m.runs)]], modelFill(m.model_id)));
       return h('tr', null,
         h('td', { class: 'rank' }, i + 1),
-        h('td', null, h('div', { class: 'chip', style: { color: 'var(--text)', fontWeight: 600 } }, h('span', { class: 'swatch', style: { background: modelColor(m.model_id) } }), md.label),
+        h('td', null, h('div', { class: 'chip', style: { color: 'var(--text)', fontWeight: 600 } }, modelSwatch(m.model_id), md.label),
           h('div', { class: 'mono muted', style: { fontSize: '11px' } }, md.model)),
         h('td', null, ci),
         h('td', { class: 'num' }, fmtPct(m.pass_rate)),
@@ -89,14 +89,14 @@ function matrix(data) {
   const g = store.grid;
   const node = h('div', { class: 'matrix', style: { gridTemplateColumns: `minmax(190px, 2.2fr) repeat(${g.models.length}, 1fr)` } });
   node.append(h('div'));
-  for (const m of g.models) node.append(h('div', { class: 'mh' }, h('span', { class: 'swatch', style: { background: modelColor(m.id) } }), m.label.replace('Model ', '')));
+  for (const m of g.models) node.append(h('div', { class: 'mh' }, modelSwatch(m.id), m.label.replace('Model ', '')));
   for (const t of g.tasks) {
     node.append(h('div', { class: 'ml', title: t.task_name }, t.task_name));
     for (const m of g.models) {
       const c = data.matrix.find((x) => x.task_id === t.task_id && x.model_id === m.id);
       const v = c ? c.mean_score : null;
       const cell = h('div', { class: 'mc-cell' + (v === null ? ' na' : ''), style: v === null ? null : { background: scoreColor(v), color: scoreInk(v) } }, v === null ? '–' : fmtScore(v));
-      tip(cell, () => tipBody(`${m.label} · ${taskById(t.task_id).task_name}`, [['Mean score', fmtScore(v)], ['Finished runs', String(c ? c.n : 0)]], modelColor(m.id)));
+      tip(cell, () => tipBody(`${m.label} · ${taskById(t.task_id).task_name}`, [['Mean score', fmtScore(v)], ['Finished runs', String(c ? c.n : 0)]], modelFill(m.id)));
       node.append(cell);
     }
   }
@@ -117,14 +117,14 @@ function profile(data) {
     const row = data.models.find((x) => x.model_id === m.id);
     const prof = (row && row.tool_profile) || {};
     const total = Object.values(prof).reduce((a, b) => a + b, 0) || 1;
-    node.append(h('div', { class: 'pl' }, h('span', { class: 'swatch', style: { background: modelColor(m.id) } }), m.label));
+    node.append(h('div', { class: 'pl' }, modelSwatch(m.id), m.label));
     for (const sv of SERVERS) {
       const n = prof[sv.id] || 0;
       const share = n / total;
       const cell = h('div', null,
-        h('div', { class: 'pbar' }, h('i', { style: { height: `${n ? Math.max(4, (share / maxShare) * 100) : 0}%`, background: modelColor(m.id), maxHeight: '100%' } })),
+        h('div', { class: 'pbar' }, h('i', { style: { height: `${n ? Math.max(4, (share / maxShare) * 100) : 0}%`, background: modelFill(m.id), maxHeight: '100%' } })),
         h('div', { class: 'pval' }, n ? fmtPct(share) : '·'));
-      tip(cell, () => tipBody(`${m.label} → ${sv.label}`, [['Calls', fmtInt(n)], ['Share', fmtPct(share)]], modelColor(m.id)));
+      tip(cell, () => tipBody(`${m.label} → ${sv.label}`, [['Calls', fmtInt(n)], ['Share', fmtPct(share)]], modelFill(m.id)));
       node.append(cell);
     }
   }

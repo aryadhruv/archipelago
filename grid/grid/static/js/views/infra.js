@@ -2,7 +2,7 @@
 
 import { store, on, taskById } from '../store.js';
 import {
-  h, icon, clear, fmtClock, modelColor, modelLabel, stateLabel, emptyState, fmtDuration,
+  h, icon, clear, fmtClock, modelColor, modelLabel, stateLabel, emptyState, fmtDuration, modelSwatch,
 } from '../util.js';
 
 export function render(root) {
@@ -82,7 +82,7 @@ export function render(root) {
         h('td', { class: 'num muted' }, x.ts ? fmtClock(x.ts) : '–'),
         h('td', null, typePill),
         h('td', { class: 'mono' }, x.run ? x.run.run_id : '–'),
-        h('td', null, x.run ? h('span', { class: 'chip' }, h('span', { class: 'swatch', style: { background: modelColor(x.run.model_id) } }), modelLabel(x.run.model_id)) : h('span', { class: 'muted' }, 'grid')),
+        h('td', null, x.run ? h('span', { class: 'chip' }, modelSwatch(x.run.model_id), modelLabel(x.run.model_id)) : h('span', { class: 'muted' }, 'grid')),
         h('td', { class: 'text-2' }, x.detail || '', x.run ? h('div', { class: 'muted', style: { fontSize: '11px' } }, taskById(x.run.task_id).task_name) : null),
         h('td', null, x.cls ? h('span', { class: 'mono', style: { fontSize: '12px' } }, x.cls) : h('span', { class: 'muted' }, '–'))));
     }
@@ -97,7 +97,7 @@ export function render(root) {
       workers.append(h('tr', { class: r ? 'clickable' : '', onclick: r ? () => { location.hash = `#/run/${r.run_id}`; } : undefined },
         h('td', { class: 'mono' }, w.port),
         h('td', null, h('span', { class: 'chip' }, h('span', { class: 'health ' + (w.health || 'ok') }), w.health || 'ok')),
-        h('td', null, r ? h('span', { class: 'chip' }, h('span', { class: 'swatch', style: { background: modelColor(r.model_id) } }), h('span', { class: 'mono' }, r.run_id)) : h('span', { class: 'muted' }, 'idle')),
+        h('td', null, r ? h('span', { class: 'chip' }, modelSwatch(r.model_id), h('span', { class: 'mono' }, r.run_id)) : h('span', { class: 'muted' }, 'idle')),
         h('td', { class: 'text-2' }, r ? `${stateLabel(r.state)}${r.duration_s ? ' · ' + fmtDuration(r.duration_s) : ''}` : '–')));
     }
   }
