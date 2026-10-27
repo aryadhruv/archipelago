@@ -90,11 +90,19 @@ export function render(root) {
       more.textContent = open ? 'Show full prompt' : 'Show less';
       more.setAttribute('aria-expanded', String(!open));
     });
+    const rubric = h('ol', { class: 'rubric-list', hidden: true }, (tk.criteria || []).map((c, i) =>
+      h('li', null, c, i === 0 ? h('span', { class: 'rubric-primary' }, 'Primary') : null)));
+    const rubricBtn = h('button', { class: 'link-btn', type: 'button', 'aria-expanded': 'false' }, 'Show rubric');
+    rubricBtn.addEventListener('click', () => {
+      rubric.hidden = !rubric.hidden;
+      rubricBtn.textContent = rubric.hidden ? 'Show rubric' : 'Hide rubric';
+      rubricBtn.setAttribute('aria-expanded', String(!rubric.hidden));
+    });
     const w = worldById(tk.world_id);
     return h('div', { class: 'card' },
       h('h3', null, tk.task_name),
       h('div', { class: 'meta' }, h('span', null, w ? w.name : tk.world_id), h('span', { class: 'num' }, `${tk.criteria_count} criteria`)),
-      p, more,
+      p, h('div', { class: 'link-row' }, more, rubricBtn), rubric,
       h('div', { class: 'tags', style: { marginTop: '12px' } }, tk.mcp_servers.map((sv) => h('span', { class: 'server-tag' }, serverLabel(sv)))));
   }));
 

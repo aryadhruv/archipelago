@@ -96,6 +96,7 @@ def grid_view(grid: Grid, store: Store) -> dict[str, Any]:
                 "world_id": t.world_id,
                 "prompt": t.prompt,
                 "criteria_count": len(t.rubric),
+                "criteria": [c["criteria"] for c in t.rubric],
                 "mcp_servers": servers,
             }
             for t in grid.tasks
