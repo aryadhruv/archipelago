@@ -67,6 +67,14 @@
       "world_id": "world_project_drive",
       "prompt": "The /inbox_drop folder is a mess. Move each file into the right project folder, rename files to the lowercase_with_underscores convention described in /projects/README.md, and delete exact duplicates. Write a short log of every change to /projects/CHANGELOG.md.",
       "criteria_count": 6,
+      "criteria": [
+        "All files from /inbox_drop are moved into a project folder",
+        "File names follow the convention in README.md",
+        "Exact duplicates are deleted and nothing else is",
+        "CHANGELOG.md exists and lists every move",
+        "CHANGELOG.md entries match the actual changes",
+        "No files outside /inbox_drop were modified"
+      ],
       "mcp_servers": [
         "filesystem_server",
         "docs_server"
@@ -78,6 +86,13 @@
       "world_id": "world_team_inbox",
       "prompt": "Find the most recent email asking to schedule a project sync. Check the team calendar for a 45-minute slot next week when all three people are free, create the event, and reply to the sender with the time.",
       "criteria_count": 5,
+      "criteria": [
+        "A 45-minute event exists next week with all three attendees",
+        "The slot does not overlap any attendee's existing events",
+        "The reply goes to the sender of the most recent sync request",
+        "The reply states the same time as the event",
+        "No other calendar events were changed"
+      ],
       "mcp_servers": [
         "mail_server",
         "calendar_server"
@@ -89,6 +104,15 @@
       "world_id": "world_survey_lab",
       "prompt": "Using /data/survey_responses.csv and the codebook, compute the share of respondents per satisfaction level by region and add a one-slide deck at /output/satisfaction.pptx with a clustered bar chart and a one-sentence takeaway.",
       "criteria_count": 7,
+      "criteria": [
+        "/output/satisfaction.pptx exists with exactly one slide",
+        "The slide has a clustered bar chart",
+        "Bars show share of respondents, not raw counts",
+        "Every region and satisfaction level is present",
+        "Labels follow the codebook",
+        "Shares match the CSV to within one percentage point",
+        "The takeaway is one sentence and matches the data"
+      ],
       "mcp_servers": [
         "sheets_server",
         "code_execution_server",
@@ -101,6 +125,14 @@
       "world_id": "world_project_drive",
       "prompt": "Summarize the two meeting notes in /meetings into a one-page document using /templates/summary_template.docx. Include decisions, owners, and open questions. Save it as /meetings/october_summary.docx.",
       "criteria_count": 6,
+      "criteria": [
+        "Output file exists at the requested path",
+        "Uses the section structure of the template",
+        "Lists every decision from both meetings",
+        "Every action item has an owner",
+        "Open questions are listed separately",
+        "Fits on one page"
+      ],
       "mcp_servers": [
         "filesystem_server",
         "docs_server"
@@ -112,6 +144,16 @@
       "world_id": "world_club_records",
       "prompt": "Clean /members/contacts.xlsx: trim whitespace, standardize phone numbers to the format in the style guide, merge duplicate people, and flag rows missing an email in a new column. Keep the original tab.",
       "criteria_count": 8,
+      "criteria": [
+        "The original tab is kept unchanged",
+        "No cell has leading or trailing whitespace",
+        "Phone numbers follow the style guide format",
+        "Duplicate people are merged into one row",
+        "Merging keeps every distinct email and phone",
+        "A new column flags rows missing an email",
+        "Only rows missing an email are flagged",
+        "No contacts were lost"
+      ],
       "mcp_servers": [
         "sheets_server",
         "filesystem_server"
@@ -123,6 +165,13 @@
       "world_id": "world_team_inbox",
       "prompt": "Read the #general thread about the offsite and the ideas doc, then draft a one-day agenda as /docs/offsite_agenda.docx and post a link with a two-line summary in the thread.",
       "criteria_count": 5,
+      "criteria": [
+        "/docs/offsite_agenda.docx exists and covers one day",
+        "The agenda includes the ideas the thread agreed on",
+        "Sessions have times and do not overlap",
+        "A message is posted in the #general offsite thread",
+        "The message links the agenda and has a two-line summary"
+      ],
       "mcp_servers": [
         "chat_server",
         "docs_server",
@@ -135,6 +184,14 @@
       "world_id": "world_project_drive",
       "prompt": "Compare /projects/beta/spec_v1.pdf and spec_v2.pdf. List every added, removed or changed requirement in a table in /projects/beta/spec_changes.docx.",
       "criteria_count": 6,
+      "criteria": [
+        "/projects/beta/spec_changes.docx exists with a table",
+        "Every added requirement is listed",
+        "Every removed requirement is listed",
+        "Every changed requirement shows old and new text",
+        "No unchanged requirement is listed as changed",
+        "Each row cites the section it comes from"
+      ],
       "mcp_servers": [
         "pdf_server",
         "docs_server"
@@ -146,6 +203,13 @@
       "world_id": "world_team_inbox",
       "prompt": "Turn the #launch thread from the past week into a three-slide status update based on /docs/status_template.pptx: progress, risks, next steps.",
       "criteria_count": 5,
+      "criteria": [
+        "The deck has exactly three slides",
+        "It uses the layout of status_template.pptx",
+        "Slides cover progress, risks and next steps, in that order",
+        "Every point is supported by the #launch thread from the past week",
+        "No messages older than a week are used"
+      ],
       "mcp_servers": [
         "chat_server",
         "slides_server"
