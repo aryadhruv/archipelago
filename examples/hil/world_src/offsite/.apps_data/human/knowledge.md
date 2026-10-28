@@ -1,0 +1,6 @@
+- We'll be 15 people at the offsite.
+- It has to be in Riverton; most of the team lives there.
+- We need on-site catering, so no venue that makes us bring food in.
+- Anything under $3,000 a day is fine.
+- The guest list with everyone's meal preferences is in guest_list.csv. I haven't counted anything in it.
+- I don't know the date yet, and it doesn't matter for picking the venue.

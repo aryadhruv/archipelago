@@ -1,0 +1,17 @@
+{
+  "grid_id": "hil",
+  "tasks": "all",
+  "repeats": 1,
+  "max_parallel": 2,
+  "max_attempts": 3,
+  "port_base": 8200,
+  "judge": {
+    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free"
+  },
+  "human": {
+    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free",
+    "extra_args": {"num_retries": 8},
+    "max_questions": 10
+  },
+  "output_dir": "runs"
+}
