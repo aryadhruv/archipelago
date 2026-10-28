@@ -22,7 +22,7 @@ OpenRouter models (`OPENROUTER_API_KEY` in `agents/.env` and `grading/.env`).
 
 ```bash
 cd archipelago/examples/simple_task
-GOOGLE_API_KEY=your_key_here ./run.sh
+bash run.sh    # needs OPENROUTER_API_KEY in agents/.env and grading/.env
 ```
 
 The script will:
