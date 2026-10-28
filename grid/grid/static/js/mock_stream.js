@@ -16,7 +16,27 @@ const CATALOG = {
   calendar_server: [['list_events', 'range'], ['read_event', 'event'], ['create_event', 'newevent']],
   chat_server: [['list_channels', 'none'], ['get_channel_history', 'channel'], ['get_thread_replies', 'thread'], ['post_message', 'channel']],
   code_execution_server: [['code_exec', 'code']],
+  human_server: [['ask_human', 'question']],
 };
+
+// The simulated human: questions an agent asks it, and its brief answers.
+const QUESTIONS = [
+  'Two files have the same title. Which one is the current version?',
+  'Is there a naming convention you want me to follow?',
+  'Should the output go in a new folder or next to the originals?',
+  'How many people should I plan for?',
+  'Which date range do you mean by "next week"?',
+  'Do you have the template you mentioned? I can\'t find it in the files.',
+];
+const ANSWERS = [
+  'The one marked final; the others are old drafts.',
+  'Lowercase with underscores, no spaces.',
+  'A new folder, please. Leave the originals alone.',
+  "I don't know that one; use your best judgment.",
+  'Monday to Friday, starting the 2nd.',
+  'Here it is.\n\nShared: /from_user/template.docx',
+  'Our notes are attached.\n\nShared: /from_user/notes.md',
+];
 
 const REASONING = [
   'Let me look at what is in the workspace before changing anything.',
@@ -338,7 +358,11 @@ export class MockStream {
   pickCall(run) {
     const task = this.tasks.get(run.task_id);
     const world = this.worlds.get(task.world_id);
-    const servers = [...task.mcp_servers];
+    // Agents ask the human now and then, not as often as they read files.
+    if (task.mcp_servers.includes('human_server') && Math.random() < 0.12) {
+      return ['human_server', 'human_server_ask_human', { question: pick(QUESTIONS) }];
+    }
+    const servers = task.mcp_servers.filter((sv) => sv !== 'human_server');
     if (world.apps.includes('filesystem_server') && !servers.includes('filesystem_server')) servers.push('filesystem_server');
     const server = Math.random() < 0.08 ? 'toolbelt' : pick(servers);
     if (server === 'toolbelt') return ['toolbelt', pick(['todo_write', 'toolbelt_inspect_tool']), { tool_name: `${pick(task.mcp_servers)}_${pick(CATALOG[pick(task.mcp_servers)])[0]}` }];
@@ -392,7 +416,7 @@ export class MockStream {
     const ok = Math.random() > 0.07;
     this.after(ms, () => {
       this.emit(run, 'tool_result', { server, tool, ref, ok, duration_ms: ms,
-        text: ok ? resultText(tool) : pick(['Error: path does not exist', 'Error: sheet index out of range', 'Error: invalid arguments']) });
+        text: ok ? resultText(tool) : errorText(tool) });
       done();
     });
   }
@@ -485,7 +509,13 @@ export class MockStream {
   }
 }
 
+function errorText(tool) {
+  if (tool === 'human_server_ask_human') return 'Error: the human model is rate-limited (429). Try again.';
+  return pick(['Error: path does not exist', 'Error: sheet index out of range', 'Error: invalid arguments']);
+}
+
 function resultText(tool) {
+  if (tool === 'human_server_ask_human') return pick(ANSWERS);
   if (/list|tree|channels/.test(tool)) return `${randi(4, 40)} entries`;
   if (/read|get_|search/.test(tool)) return `Read ${randi(800, 24000).toLocaleString('en-US')} chars`;
   if (tool === 'todo_write') return '3 todos saved';

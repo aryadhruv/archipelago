@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
   h, icon, clear, fmtTokens, fmtDuration, fmtScore, fmtClock, fmtInt, modelColor, modelInk, modelLabel, serverLabel,
-  shortTool, stateLabel, stateGroup, emptyState, scoreColor, scoreInk, tip, modelInitials,
+  shortTool, stateLabel, stateGroup, emptyState, scoreColor, scoreInk, tip, modelInitials, isAskHuman,
 } from '../util.js';
 import { stackedBars, legend } from '../charts.js';
 
@@ -191,10 +191,34 @@ function groupEvents(events) {
   return groups;
 }
 
+/** The question out of an ask_human args preview, which may be clipped mid-JSON. */
+function askedQuestion(preview) {
+  try { return JSON.parse(preview).question || preview; } catch {
+    return preview.replace(/^\{\s*"question"\s*:\s*"/, '').replace(/\\"/g, '"');
+  }
+}
+
+/** An ask_human call as a question and answer; shared files get their own chips. */
+function renderAsk(e) {
+  const r = e.result;
+  const lines = r && r.text ? r.text.split('\n') : [];
+  const shared = lines.filter((l) => l.startsWith('Shared: ')).map((l) => l.slice(8));
+  const answer = lines.filter((l) => !l.startsWith('Shared: ')).join('\n').trim();
+  return h('div', { class: 'tl-ask' },
+    h('div', { class: 'top' }, icon('person', 14), h('b', null, 'Asked the user'),
+      r ? (r.ok ? null : h('span', { class: 'pill bad' }, icon('x', 12), 'error'))
+        : h('span', { class: 'pill run' }, h('span', { class: 'spinner', style: { width: '10px', height: '10px' } }), 'waiting'),
+      r ? h('span', { class: 'ms' }, `${fmtInt(r.duration_ms)} ms`) : null),
+    e.args_preview ? h('div', { class: 'q' }, askedQuestion(e.args_preview)) : null,
+    answer ? h('div', { class: 'a', style: r.ok ? null : { color: 'var(--critical-text)' } }, answer) : null,
+    shared.length ? h('div', { class: 'shared' }, shared.map((p) => h('span', { class: 'chip' }, icon('file', 12), p))) : null);
+}
+
 function renderItem(e) {
   switch (e.kind) {
     case 'reasoning': return h('div', { class: 'tl-reason' }, `“${e.text}”`);
     case 'tool_call': {
+      if (isAskHuman(e)) return renderAsk(e);
       const r = e.result;
       return h('div', { class: 'tl-call' },
         h('div', { class: 'top' },

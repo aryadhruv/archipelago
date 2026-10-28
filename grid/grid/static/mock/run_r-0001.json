@@ -14,7 +14,7 @@
   "duration_s": 92,
   "tokens": 55982,
   "steps": 5,
-  "tool_calls": 8,
+  "tool_calls": 10,
   "attempts": [
     {
       "attempt": 1,

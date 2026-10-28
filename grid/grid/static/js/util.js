@@ -175,9 +175,14 @@ export const SERVERS = [
   { id: 'calendar_server', label: 'Calendar', icon: 'calendar' },
   { id: 'chat_server', label: 'Chat', icon: 'chat' },
   { id: 'code_execution_server', label: 'Code', icon: 'code' },
+  { id: 'human_server', label: 'Human', icon: 'person' },
   { id: 'toolbelt', label: 'Toolbelt', icon: 'toolbelt' },
 ];
 export const serverLabel = (id) => (SERVERS.find((x) => x.id === id) || { label: id }).label;
+/** The servers a grid can use: the simulated human only when the grid has one. */
+export const gridServers = (grid) => SERVERS.filter((sv) => sv.id !== 'human_server' || (grid && grid.human_model));
+/** An ask_human call: the agent asking the simulated human. */
+export const isAskHuman = (e) => e.server === 'human_server' && shortTool(e.tool, e.server) === 'ask_human';
 export const TOOLBELT_TOOLS = ['todo_write', 'toolbelt_list_tools', 'toolbelt_inspect_tool',
   'toolbelt_add_tool', 'toolbelt_remove_tool', 'final_answer'];
 /** Short tool name without the `{server}_` prefix. */
@@ -199,6 +204,7 @@ export const ICONS = {
   chat: ['M4 5h16v10H9l-5 4z'],
   code: ['M9 8l-4 4 4 4', 'M15 8l4 4-4 4', 'M13 6l-2 12'],
   toolbelt: ['M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.3-.7-.7-2.3z'],
+  person: ['M12 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z', 'M5 20a7 7 0 0 1 14 0'],
   agent: ['M7 8h10v9H7z', 'M12 4v4', 'M10 12h.01', 'M14 12h.01', 'M4 12v2', 'M20 12v2'],
   play: ['M8 5l11 7-11 7z'],
   pause: ['M8 5v14', 'M16 5v14'],

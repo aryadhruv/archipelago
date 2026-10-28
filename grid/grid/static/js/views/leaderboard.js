@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { store, taskById } from '../store.js';
 import {
   h, icon, clear, fmtScore, fmtPct, fmtTokens, fmtDuration, fmtInt, modelColor, modelLabel, modelById,
-  scoreColor, scoreInk, SERVERS, tip, tipBody, download, emptyState, modelSwatch, modelFill, modelAlt,
+  scoreColor, scoreInk, gridServers, tip, tipBody, download, emptyState, modelSwatch, modelFill, modelAlt,
 } from '../util.js';
 import { scatter, ciMark } from '../charts.js';
 
@@ -105,7 +105,8 @@ function matrix(data) {
 
 function profile(data) {
   const g = store.grid;
-  const node = h('div', { class: 'profile' });
+  const SERVERS = gridServers(g);
+  const node = h('div', { class: 'profile', style: { gridTemplateColumns: `110px repeat(${SERVERS.length}, minmax(0, 1fr))` } });
   let maxShare = 0.01;
   for (const row of data.models) {
     const tot = Object.values(row.tool_profile || {}).reduce((a, b) => a + b, 0) || 1;

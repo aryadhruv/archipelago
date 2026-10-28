@@ -6,7 +6,7 @@
 import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
-  h, s, icon, clear, ICONS, SERVERS, modelColor, modelInk, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
+  h, s, icon, clear, ICONS, gridServers, modelColor, modelInk, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
   tipBody, pathFromArgs, reducedMotion, fmtInt, fmtClock, stateLabel, stateGroup, modelFill, modelAlt,
 } from '../util.js';
 
@@ -30,6 +30,7 @@ export function render(root, route) {
 
   // ---------- layout ----------
   const models = g.models;
+  const SERVERS = gridServers(g);
   const agentPos = new Map(models.map((m, i) => [m.id, { x: AX, y: 120 + (i * (H - 200)) / Math.max(1, models.length - 1) }]));
   const serverPos = new Map(SERVERS.map((sv, i) => {
     const t = i / (SERVERS.length - 1);

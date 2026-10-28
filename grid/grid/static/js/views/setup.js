@@ -71,6 +71,7 @@ export function render(root) {
       h('div', null, h('span', { class: 'k' }, 'Image'), h('span', { class: 'mono' }, g.image_tag)),
       h('div', null, h('span', { class: 'k' }, 'Git SHA'), h('span', { class: 'mono' }, g.git_sha)),
       h('div', null, h('span', { class: 'k' }, 'Judge'), h('span', { class: 'mono' }, g.judge_model)),
+      g.human_model && h('div', null, h('span', { class: 'k' }, 'Human'), h('span', { class: 'mono' }, g.human_model)),
       h('div', null, h('span', { class: 'k' }, 'Parallel'), `${g.max_parallel} sandboxes at a time`),
       h('div', null, h('span', { class: 'k' }, 'Created'), fmtDateTime(g.created_at))),
     h('div', { class: 'hero-actions' }, h('div', { style: { display: 'grid', gap: '8px', justifyItems: 'end' } },
