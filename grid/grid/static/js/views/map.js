@@ -30,18 +30,19 @@ export function render(root, route) {
 
   // ---------- layout ----------
   const models = g.models;
-  const SERVERS = gridServers(g);
-  // The simulated human (kind 'human') sits apart from the MCP servers, between
-  // the agents and the server column, under its own title.
-  const column = SERVERS.filter((sv) => sv.kind !== 'human');
-  const apart = SERVERS.filter((sv) => sv.kind === 'human');
+  // The simulated human (kind 'human') heads the server column, in a slot of
+  // its own above the arc of data servers.
+  const SERVERS = [...gridServers(g)].sort((a, b) => (b.kind === 'human') - (a.kind === 'human'));
+  const head = SERVERS.filter((sv) => sv.kind === 'human');
+  const arc = SERVERS.filter((sv) => sv.kind !== 'human');
+  const top = head.length ? 150 : 64;
   const agentPos = new Map(models.map((m, i) => [m.id, { x: AX, y: 120 + (i * (H - 200)) / Math.max(1, models.length - 1) }]));
   const serverPos = new Map([
-    ...column.map((sv, i) => {
-      const t = i / (column.length - 1);
-      return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: 64 + t * (H - 118) }];
+    ...head.map((sv, i) => [sv.id, { x: SX, y: 84 + i * 70 }]),
+    ...arc.map((sv, i) => {
+      const t = i / (arc.length - 1);
+      return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: top + t * (H - 54 - top) }];
     }),
-    ...apart.map((sv, i) => [sv.id, { x: (AX + SX) / 2, y: 82 + i * 96 }]),
   ]);
 
   const svg = s('svg', { class: 'map', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Live map of tool calls from model agents to MCP servers' });
@@ -55,7 +56,6 @@ export function render(root, route) {
   svg.append(defs);
   svg.append(s('text', { class: 'col-title', x: AX, y: 36, 'text-anchor': 'middle' }, 'Agents'));
   svg.append(s('text', { class: 'col-title', x: SX, y: 36, 'text-anchor': 'middle' }, 'MCP servers'));
-  if (apart.length) svg.append(s('text', { class: 'col-title human', x: (AX + SX) / 2, y: 36, 'text-anchor': 'middle' }, 'Human in the loop'));
 
   const gEdges = s('g'), gHits = s('g'), gParticles = s('g', { filter: 'url(#glow)' }), gNodes = s('g');
   svg.append(gEdges, gHits, gParticles, gNodes);
@@ -67,8 +67,7 @@ export function render(root, route) {
     for (const sv of SERVERS) {
       const b = serverPos.get(sv.id);
       const x1 = a.x + 32, x2 = b.x - (sv.kind === 'human' ? 32 : 26);
-      const k = Math.min(260, (x2 - x1) * 0.45);
-      const d = `M${x1},${a.y} C${x1 + k},${a.y} ${x2 - k},${b.y} ${x2},${b.y}`;
+      const d = `M${x1},${a.y} C${x1 + 260},${a.y} ${x2 - 260},${b.y} ${x2},${b.y}`;
       const path = s('path', { class: 'edge' + (sv.kind ? ' ' + sv.kind : ''), d });
       const hit = s('path', { class: 'edge-hit', d });
       gEdges.append(path);
@@ -92,11 +91,8 @@ export function render(root, route) {
     const bg = s('circle', { class: 'hub-bg', r: big ? 28 : 22 });
     const ic = s('g', { class: 'hub-icon', transform: big ? 'translate(-14,-14) scale(1.17)' : 'translate(-11,-11) scale(0.92)' });
     for (const d of ICONS[sv.icon]) ic.append(s('path', { d }));
-    // Hubs in the column label to their right; the human labels below.
-    const label = big ? s('text', { class: 'node-label', x: 0, y: 48, 'text-anchor': 'middle' }, sv.label)
-      : s('text', { class: 'node-label', x: 36, y: -2 }, sv.label);
-    const sub = big ? s('text', { class: 'node-sub', x: 0, y: 64, 'text-anchor': 'middle' }, '0 calls/min')
-      : s('text', { class: 'node-sub', x: 36, y: 14 }, '0 calls/min');
+    const label = s('text', { class: 'node-label', x: big ? 42 : 36, y: -2 }, big ? 'Human in the loop' : sv.label);
+    const sub = s('text', { class: 'node-sub', x: big ? 42 : 36, y: 14 }, '0 calls/min');
     grp.append(ping, busy, bg, ic, label, sub);
     gNodes.append(grp);
     const hub = { grp, ping, busy, sub, times: [], total: 0, inflight: 0, tools: new Map(), pingAt: -1e9, errAt: -1e9 };

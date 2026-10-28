@@ -383,7 +383,6 @@ svg.map { display: block; width: 100%; height: auto; max-height: calc(100vh - 25
 .map .agent-icon { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .map .dim { opacity: 0.18; }
 .map .col-title { fill: var(--text-muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
-.map .col-title.human { fill: var(--human); }
 .map .hub.human .hub-bg { fill: var(--human-wash); stroke: var(--human); stroke-width: 2; stroke-dasharray: 5 3; }
 .map .hub.human .hub-icon { stroke: var(--human); }
 .map .hub.human .node-label { fill: var(--human); }
