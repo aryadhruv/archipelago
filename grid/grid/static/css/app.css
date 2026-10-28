@@ -386,7 +386,6 @@ svg.map { display: block; width: 100%; height: auto; max-height: calc(100vh - 25
 .map .hub.human .hub-bg { fill: var(--human-wash); stroke: var(--human); stroke-width: 2; stroke-dasharray: 5 3; }
 .map .hub.human .hub-icon { stroke: var(--human); }
 .map .hub.human .node-label { fill: var(--human); }
-.map .edge.human { stroke-dasharray: 6 5; }
 .map .busy-ring { fill: none; stroke-width: 2; }
 .map-legend { display: flex; gap: var(--sp-4); font-size: var(--fs-s); color: var(--text-2); padding: var(--sp-2) var(--sp-4) var(--sp-3); flex-wrap: wrap; align-items: center; }
 .map-legend .lg { display: inline-flex; gap: 6px; align-items: center; }

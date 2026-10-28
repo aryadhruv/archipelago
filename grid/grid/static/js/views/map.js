@@ -68,7 +68,7 @@ export function render(root, route) {
       const b = serverPos.get(sv.id);
       const x1 = a.x + 32, x2 = b.x - (sv.kind === 'human' ? 32 : 26);
       const d = `M${x1},${a.y} C${x1 + 260},${a.y} ${x2 - 260},${b.y} ${x2},${b.y}`;
-      const path = s('path', { class: 'edge' + (sv.kind ? ' ' + sv.kind : ''), d });
+      const path = s('path', { class: 'edge', d });
       const hit = s('path', { class: 'edge-hit', d });
       gEdges.append(path);
       gHits.append(hit);
