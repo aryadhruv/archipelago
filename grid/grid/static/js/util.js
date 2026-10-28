@@ -175,7 +175,8 @@ export const SERVERS = [
   { id: 'calendar_server', label: 'Calendar', icon: 'calendar' },
   { id: 'chat_server', label: 'Chat', icon: 'chat' },
   { id: 'code_execution_server', label: 'Code', icon: 'code' },
-  { id: 'human_server', label: 'Human', icon: 'person' },
+  // kind: 'human' sets it apart on the map: not a data source but the person who gave the task.
+  { id: 'human_server', label: 'Human', icon: 'person', kind: 'human' },
   { id: 'toolbelt', label: 'Toolbelt', icon: 'toolbelt' },
 ];
 export const serverLabel = (id) => (SERVERS.find((x) => x.id === id) || { label: id }).label;
