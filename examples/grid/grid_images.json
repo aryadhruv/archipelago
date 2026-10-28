@@ -9,7 +9,7 @@
   "max_attempts": 3,
   "port_base": 8100,
   "judge": {
-    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free"
+    "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
   },
   "output_dir": "runs"
 }

@@ -22,10 +22,12 @@ every model can do the task:
 | Type | Grid file | Task | Tested models |
 |---|---|---|---|
 | **Text** | [`grid/grid_text.json`](grid/) | Find the gorilla among text notes | Laguna S 2.1, Nemotron 3 Ultra (text only) |
-| **Images** | [`grid/grid_images.json`](grid/) | Find the gorilla among images | Gemma 4 26B, Dots 3 Note (read images) |
+| **Images** | [`grid/grid_images.json`](grid/) | Find the gorilla among images | Dots 3 Note, Nemotron 3.5 Super VL (read images) |
 | **Human-in-the-loop** | [`hil/grid.json`](hil/) | Plan an offsite by asking the user (`ask_human`, a simulated human), plus a task that needs no questions | Laguna S 2.1, Nemotron 3 Ultra |
 
-The judge is Nemotron 3.5 Super VL, which reads text and images.
+The judge grades the final answer, which is text: Nemotron 3.5 Super VL for
+the text and HIL grids, Nemotron 3 Ultra for the images grid (where Super VL is
+one of the models being tested).
 
 Two single-task examples run one model end to end (populate → MCP servers →
 agent → snapshot → grading), without the grid:
