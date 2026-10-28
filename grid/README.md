@@ -15,7 +15,7 @@ uv run --locked python -m grid serve ../examples/grid/grid.json   # dashboard AP
 
 `agents/.env` and `grading/.env` need the provider keys for the models and the
 judge, as for the examples. Each runner reads its own file. The grid itself
-never reads keys. `validate` asks each runner whether its keys are present and
+reads keys only for the simulated human (`human`, below), from `agents/.env`. `validate` asks each runner whether its keys are present and
 prints only the key names that are missing.
 
 ## Inputs
@@ -71,9 +71,42 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `pass_score` | 1.0 | The score a run needs to count as a pass on the leaderboard |
 | `agent_grace_sec` | 600 | Seconds past the agent's own wall clock before the grid kills it (scored as a timeout) |
 | `grading_timeout_sec` | 3600 | Seconds before the grid kills a grading attempt and reruns grading |
+| `human` | off | `{"model": ..., "extra_args": ..., "max_questions": null}`: a simulated human the models can ask (below) |
 
 Each rubric criterion becomes one `output_llm` verifier. The first one is the
 primary objective.
+
+### Simulated human
+
+With `human` set, every run gets one more MCP server, `human_server`, with one
+tool: `ask_human(question)`. The model being tested uses it to ask the person
+who assigned the task. An LLM (`human.model`, the same one for every model in
+the grid) plays that person. It knows:
+
+- the task prompt
+- its persona: `world_descriptions.json` → `{"world_id": ..., "human":
+  {"persona": "..."}}`. Without one, it's accommodating and answers in one to
+  three sentences.
+- `.apps_data/human/knowledge.md` in the world zip or task overlay: what it
+  knows from memory
+- the names of the files in `.apps_data/human/files/`. It doesn't read them.
+  Like a person, it answers from memory, points to a path in the agent's files,
+  or shares one of its own files. A shared file is copied to `/from_user/<name>`
+  in the agent's filesystem, and the reply ends with `Shared: /from_user/<name>`.
+
+The model being tested can't read `.apps_data/human/`: the code sandbox blocks
+`/.apps_data`, and the filesystem server only sees `/filesystem`. Shared files
+are new files in the final state, so rubrics that check outputs should expect
+them under `/from_user/`.
+
+- The human keeps the conversation for the run, so follow-ups make sense.
+- Past `max_questions`, it replies that it isn't available.
+- Its model calls use the provider keys from `agents/.env` (and the
+  environment). The grid passes them into that one server's environment for
+  the run. They're never written to disk, and the code sandbox's env scrub
+  keeps them from model-run code.
+- `validate` checks that the key is there. The human's token use is logged to
+  the environment's stderr only, not counted on the leaderboard.
 
 ## What a run does
 
@@ -84,7 +117,7 @@ primary objective.
    BuildKit.
 2. Populate the world, then the task overlay. Snapshot that state as
    `initial.zip`: grading compares the final state against it.
-3. `POST /apps` with the MCP config.
+3. `POST /apps` with the MCP config (with `human`, the human server's env filled in for this task).
 4. Run the agent, with `FILE_LOGGING` writing its events to `agent_events.jsonl`.
 5. Snapshot the final state (`final.zip`), then stop the environment.
 6. Grade.

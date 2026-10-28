@@ -3,14 +3,17 @@
 The inputs folder holds the same files as the ``mercor/apex-agents`` dataset:
 
     tasks_and_rubrics.json            [{task_id, task_name, world_id, prompt, rubric, ...}]
-    world_descriptions.json           [{world_id, ...}] (optional)
+    world_descriptions.json           [{world_id, human?: {persona}, ...}] (optional)
     world_files_zipped/<world_id>.zip filesystem/ and optional .apps_data/
+                                      (.apps_data/human/ is the simulated human's)
     task_files/<task_id>/             optional per-task overlay, same two subsystems
 
 Relative paths in grid.json resolve against the folder grid.json is in.
 """
 
+import copy
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +21,11 @@ from typing import Any
 
 DEFAULTS_DIR = Path(__file__).parent / "defaults"
 REPO_DIR = Path(__file__).resolve().parents[2]
+
+HUMAN_SERVER = "human_server"
+# Provider settings the simulated human's model may need, copied from
+# agents/.env into that one server's environment.
+_PROVIDER_VAR = re.compile(r"^[A-Z0-9_]+_(API_KEY|API_BASE|BASE_URL)$")
 
 # Model ids name run directories and run ids, so keep them path-safe.
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -47,6 +55,16 @@ class Task:
     has_task_files: bool
 
 
+@dataclass(frozen=True)
+class Human:
+    """The simulated human every model in the grid can ask (``ask_human``)."""
+
+    model: str
+    extra_args: dict[str, Any] | None = None
+    # Questions per run; past it the human is unavailable. None is no cap.
+    max_questions: int | None = None
+
+
 @dataclass
 class Grid:
     grid_id: str
@@ -72,6 +90,9 @@ class Grid:
     grading_timeout_sec: int = 3600
     # The score a run needs to count as a pass on the leaderboard.
     pass_score: float = 1.0
+    human: Human | None = None
+    # world_id -> the simulated human's persona, from world_descriptions.json.
+    personas: dict[str, str] = field(default_factory=dict)
     world_ids: list[str] = field(default_factory=list)
 
     @property
@@ -157,6 +178,32 @@ def _load_tasks(inputs_dir: Path, selected: Any) -> list[Task]:
     return [by_id[task_id] for task_id in selected]
 
 
+def _load_human(raw: Any) -> Human | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not raw.get("model"):
+        raise InputError('"human" needs {"model": ...}')
+    max_questions = raw.get("max_questions")
+    if max_questions is not None and int(max_questions) < 0:
+        raise InputError('"human.max_questions" must be at least 0')
+    return Human(
+        model=raw["model"],
+        extra_args=raw.get("extra_args") or None,
+        max_questions=None if max_questions is None else int(max_questions),
+    )
+
+
+def _load_personas(inputs_dir: Path) -> dict[str, str]:
+    path = inputs_dir / "world_descriptions.json"
+    if not path.exists():
+        return {}
+    return {
+        w["world_id"]: persona
+        for w in _read_json(path)
+        if (persona := ((w.get("human") or {}).get("persona") or "").strip())
+    }
+
+
 def load_grid(config_path: Path) -> Grid:
     config_path = config_path.resolve()
     base = config_path.parent
@@ -214,6 +261,17 @@ def load_grid(config_path: Path) -> Grid:
         pass_score=float(cfg.get("pass_score", 1.0)),
     )
     grid.world_ids = sorted({t.world_id for t in tasks})
+    grid.human = _load_human(cfg.get("human"))
+    if grid.human is not None:
+        grid.personas = _load_personas(inputs_dir)
+        # The server entry without its per-run env (see run_mcp_config), so
+        # every list of the grid's servers includes it.
+        servers = grid.mcp_config.setdefault("mcpServers", {})
+        servers.setdefault(HUMAN_SERVER, _read_json(DEFAULTS_DIR / "human_server.json"))
+        # The toolbelt hides tools until the model lists them, and models
+        # otherwise ask in chat, which ends the run. Every model gets this.
+        human_prompt = (DEFAULTS_DIR / "human_prompt.md").read_text().strip()
+        grid.system_prompt = f"{grid.system_prompt}\n\n{human_prompt}"
     if not _ID_PATTERN.match(grid.grid_id):
         raise InputError(f"grid_id {grid.grid_id!r} must match {_ID_PATTERN.pattern}")
     if grid.repeats < 1 or grid.max_parallel < 1 or grid.max_attempts < 1:
@@ -247,3 +305,47 @@ def verifiers_for(task: Task) -> list[dict[str, Any]]:
         }
         for i, c in enumerate(task.rubric)
     ]
+
+
+def provider_env(env_file: Path = REPO_DIR / "agents" / ".env") -> dict[str, str]:
+    """Provider keys and endpoints from agents/.env; variables already set win.
+
+    Read the way the agent runner reads its own .env, so the simulated human
+    uses the same keys as the models being tested.
+    """
+    values: dict[str, str] = {}
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, _, value = line.removeprefix("export ").partition("=")
+            values[name.strip()] = value.strip().strip("'\"")
+    values.update(os.environ)
+    return {k: v for k, v in values.items() if _PROVIDER_VAR.match(k) and v}
+
+
+def run_mcp_config(
+    grid: Grid, task: Task, provider: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """The MCP config for one run: the simulated human's env filled in.
+
+    It holds provider keys, so it's only ever posted to the environment, never
+    written to disk or to events.
+    """
+    if grid.human is None:
+        return grid.mcp_config
+    config = copy.deepcopy(grid.mcp_config)
+    server = config["mcpServers"][HUMAN_SERVER]
+    server["env"] = {
+        **(server.get("env") or {}),
+        **(provider_env() if provider is None else provider),
+        "HUMAN_MODEL": grid.human.model,
+        "HUMAN_EXTRA_ARGS": json.dumps(grid.human.extra_args or {}),
+        "HUMAN_PERSONA": grid.personas.get(task.world_id, ""),
+        "HUMAN_TASK_PROMPT": task.prompt,
+        "HUMAN_MAX_QUESTIONS": ""
+        if grid.human.max_questions is None
+        else str(grid.human.max_questions),
+    }
+    return config

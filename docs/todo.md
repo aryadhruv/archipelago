@@ -24,6 +24,13 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
    Greenhouse, TaxJar), but the repo has no MCP servers for those apps, so
    they can't run as shipped. Either remove them or pair each with a server.
 
+3. **Simulated human follow-ups.**
+   - Count the human's tokens per run (now only logged to the environment's
+     stderr).
+   - Show questions asked per model on the leaderboard.
+   - A failed human model call reaches the agent as a tool error and counts
+     against the model. Decide whether to classify it as infra.
+
 ### Small fixes
 
 - The committed `examples/simple_task/mcp_config.json` uses plain `python`
@@ -87,6 +94,8 @@ Apply these in every grid.
 - **Dashboard** (`grid serve`): setup and preflight, Mission Control, the
   Live Map (live, focus with the world's files, replay), run detail,
   leaderboard and infra, on the API's REST endpoints and event stream.
+- **Simulated human** (`mcp_servers/human`, grid `human`): `ask_human`, with a
+  persona per world, a knowledge file, and file sharing into `/from_user/`.
 - **Leaderboard** (`GET /api/leaderboard`): mean score ± CI, pass rate,
   tokens, time, errors, fails and tool use per model, and a task × model
   matrix.

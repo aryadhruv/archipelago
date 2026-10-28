@@ -145,6 +145,7 @@ class Scheduler:
             "models": [{"id": m.id, "model": m.model} for m in self.grid.models],
             "repeats": self.grid.repeats,
             "judge": self.grid.grading_settings["llm_judge_model"],
+            "human": self.grid.human.model if self.grid.human else None,
         }
         previous = self.store.get_meta("manifest")
         if previous and previous.get("image") != image:

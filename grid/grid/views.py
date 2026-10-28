@@ -88,6 +88,7 @@ def grid_view(grid: Grid, store: Store) -> dict[str, Any]:
         "max_parallel": grid.max_parallel,
         "max_attempts": grid.max_attempts,
         "judge_model": grid.grading_settings["llm_judge_model"],
+        "human_model": grid.human.model if grid.human else None,
         "worlds": [_world_info(grid, w, names) for w in grid.world_ids],
         "tasks": [
             {

@@ -4,7 +4,15 @@ import zipfile
 
 import pytest
 
-from grid.inputs import InputError, agent_config_for, load_grid, verifiers_for
+from grid.inputs import (
+    HUMAN_SERVER,
+    InputError,
+    agent_config_for,
+    load_grid,
+    provider_env,
+    run_mcp_config,
+    verifiers_for,
+)
 from grid.scheduler import grid_order
 from grid.worlds import overlay_tarballs, tar_gz_to_zip, world_tarballs
 
@@ -131,3 +139,79 @@ def test_overlay_and_snapshot_zip(tmp_path):
         tar.add(overlay / "filesystem" / "in" / "b.txt", arcname="filesystem/in/b.txt")
     with zipfile.ZipFile(tar_gz_to_zip(snapshot, tmp_path / "snap.zip")) as zf:
         assert zf.read("filesystem/in/b.txt") == b"b"
+
+
+def _with_human(grid_dir, human, personas=None):
+    config = json.loads((grid_dir / "grid.json").read_text())
+    _write(grid_dir / "grid.json", {**config, "human": human})
+    if personas is not None:
+        _write(grid_dir / "world_descriptions.json", personas)
+    return load_grid(grid_dir / "grid.json")
+
+
+def test_no_human_leaves_mcp_config_alone(grid_dir):
+    grid = load_grid(grid_dir / "grid.json")
+    assert grid.human is None
+    assert HUMAN_SERVER not in grid.mcp_config["mcpServers"]
+    assert run_mcp_config(grid, grid.tasks[0], {}) is grid.mcp_config
+    assert "ask_human" not in grid.system_prompt
+
+
+def test_human_needs_a_model(grid_dir):
+    with pytest.raises(InputError, match="human"):
+        _with_human(grid_dir, {"max_questions": 3})
+
+
+def test_human_fills_the_run_config(grid_dir):
+    grid = _with_human(
+        grid_dir,
+        {"model": "openrouter/x/h", "extra_args": {"temperature": 0}},
+        [{"world_id": "w1", "human": {"persona": "Terse manager."}}],
+    )
+    assert grid.human.max_questions is None
+    assert grid.personas == {"w1": "Terse manager."}
+    assert "human_server_ask_human" in grid.system_prompt
+    # Listed with the grid's servers, without per-run values.
+    template = grid.mcp_config["mcpServers"][HUMAN_SERVER]
+    assert "HUMAN_MODEL" not in template["env"]
+
+    config = run_mcp_config(grid, grid.tasks[0], {"OPENROUTER_API_KEY": "sk-x"})
+    env = config["mcpServers"][HUMAN_SERVER]["env"]
+    assert env["HUMAN_MODEL"] == "openrouter/x/h"
+    assert json.loads(env["HUMAN_EXTRA_ARGS"]) == {"temperature": 0}
+    assert env["HUMAN_PERSONA"] == "Terse manager."
+    assert env["HUMAN_TASK_PROMPT"] == "Find it."
+    assert env["HUMAN_MAX_QUESTIONS"] == ""
+    assert env["HUMAN_DATA_ROOT"] == "/.apps_data/human"
+    assert env["OPENROUTER_API_KEY"] == "sk-x"
+    # Keys never land in the grid's shared config.
+    assert "OPENROUTER_API_KEY" not in json.dumps(grid.mcp_config)
+    # Other servers get no keys.
+    others = [s for name, s in config["mcpServers"].items() if name != HUMAN_SERVER]
+    assert "sk-x" not in json.dumps(others)
+
+
+def test_human_cap_and_default_persona(grid_dir):
+    grid = _with_human(grid_dir, {"model": "openrouter/x/h", "max_questions": 2})
+    env = run_mcp_config(grid, grid.tasks[0], {})["mcpServers"][HUMAN_SERVER]["env"]
+    assert env["HUMAN_MAX_QUESTIONS"] == "2"
+    # Empty: the server falls back to its default persona.
+    assert env["HUMAN_PERSONA"] == ""
+
+
+def test_provider_env_reads_only_provider_vars(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "from-env")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# comment\n"
+        "OPENROUTER_API_KEY='sk-file'\n"
+        "export ANTHROPIC_API_KEY=from-file\n"
+        "OPENAI_API_BASE=http://x\n"
+        "FILE_LOGGING=true\n"
+    )
+    env = provider_env(env_file)
+    assert env["OPENROUTER_API_KEY"] == "sk-file"
+    assert env["ANTHROPIC_API_KEY"] == "from-env"
+    assert env["OPENAI_API_BASE"] == "http://x"
+    assert "FILE_LOGGING" not in env

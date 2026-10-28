@@ -66,6 +66,14 @@ what we removed.
   behind it: REST and server-sent events over a grid's `grid.db`, with start,
   pause, stop, smoke test and retry. Served at `http://127.0.0.1:7070/`. See
   `grid/README.md`.
+- **Simulated human** (`mcp_servers/human`, new; grid `human` setting). An
+  `ask_human(question)` MCP tool lets the model being tested ask the person
+  who assigned the task. An LLM plays that person, from the task prompt, a
+  persona in `world_descriptions.json`, and `.apps_data/human/knowledge.md`.
+  It shares files from `.apps_data/human/files/` by copying them to
+  `/from_user/` rather than reading them. The grid copies the provider keys
+  from `agents/.env` into that server's environment only. Before this, the
+  grid never read keys. See `grid/README.md`.
 
 ## Fixed
 

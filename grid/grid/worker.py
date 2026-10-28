@@ -17,7 +17,13 @@ from typing import Any
 from grid.classify import Outcome, Verdict, classify_agent, classify_grading
 from grid.envctl import INFRA_ERRORS, Environment
 from grid.events import AgentEventNormalizer, grading_progress, tail_lines
-from grid.inputs import REPO_DIR, Grid, agent_config_for, verifiers_for
+from grid.inputs import (
+    REPO_DIR,
+    Grid,
+    agent_config_for,
+    run_mcp_config,
+    verifiers_for,
+)
 from grid.store import Run, Store
 from grid.worlds import tar_gz_to_zip
 
@@ -238,7 +244,7 @@ class Worker:
             initial.unlink()
 
             self._state(run, "apps_starting")
-            await env.configure_apps(self.grid.mcp_config)
+            await env.configure_apps(run_mcp_config(self.grid, task))
 
             self._state(run, "agent_running")
             agent_started = time.time()

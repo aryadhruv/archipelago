@@ -1,0 +1,13 @@
+{
+  "transport": "stdio",
+  "command": "/app/mcp_servers/human/.venv/bin/python",
+  "args": [
+    "main.py"
+  ],
+  "cwd": "/app/mcp_servers/human/mcp_servers/human_server",
+  "env": {
+    "HUMAN_DATA_ROOT": "/.apps_data/human",
+    "HUMAN_FS_ROOT": "/filesystem",
+    "MCP_TRANSPORT": "stdio"
+  }
+}
