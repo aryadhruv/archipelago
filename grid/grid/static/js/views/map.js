@@ -30,17 +30,18 @@ export function render(root, route) {
 
   // ---------- layout ----------
   const models = g.models;
-  // The simulated human (kind 'human') heads the server arc. Its hub is larger,
-  // so the gap after it is wider; every hub stays on the same curve.
+  // The simulated human (kind 'human') heads the server arc. Its hub is 6px
+  // larger in radius, so the step after it is a little longer, which keeps the
+  // gaps between hub edges even. Every hub stays on the same curve.
   const SERVERS = [...gridServers(g)].sort((a, b) => (b.kind === 'human') - (a.kind === 'human'));
-  const gaps = SERVERS.slice(1).map((_, i) => (SERVERS[i].kind === 'human' ? 1.6 : 1));
+  const gaps = SERVERS.slice(1).map((_, i) => (SERVERS[i].kind === 'human' ? 1.15 : 1));
   const span = gaps.reduce((a, b) => a + b, 0) || 1;
   let along = 0;
   const agentPos = new Map(models.map((m, i) => [m.id, { x: AX, y: 120 + (i * (H - 200)) / Math.max(1, models.length - 1) }]));
   const serverPos = new Map(SERVERS.map((sv, i) => {
     if (i > 0) along += gaps[i - 1];
     const t = along / span;
-    return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: 70 + t * (H - 124) }];
+    return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: 76 + t * (H - 130) }];
   }));
 
   const svg = s('svg', { class: 'map', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Live map of tool calls from model agents to MCP servers' });
