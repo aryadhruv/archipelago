@@ -30,20 +30,18 @@ export function render(root, route) {
 
   // ---------- layout ----------
   const models = g.models;
-  // The simulated human (kind 'human') heads the server column, in a slot of
-  // its own above the arc of data servers.
+  // The simulated human (kind 'human') heads the server arc. Its hub is larger,
+  // so the gap after it is wider; every hub stays on the same curve.
   const SERVERS = [...gridServers(g)].sort((a, b) => (b.kind === 'human') - (a.kind === 'human'));
-  const head = SERVERS.filter((sv) => sv.kind === 'human');
-  const arc = SERVERS.filter((sv) => sv.kind !== 'human');
-  const top = head.length ? 150 : 64;
+  const gaps = SERVERS.slice(1).map((_, i) => (SERVERS[i].kind === 'human' ? 1.6 : 1));
+  const span = gaps.reduce((a, b) => a + b, 0) || 1;
+  let along = 0;
   const agentPos = new Map(models.map((m, i) => [m.id, { x: AX, y: 120 + (i * (H - 200)) / Math.max(1, models.length - 1) }]));
-  const serverPos = new Map([
-    ...head.map((sv, i) => [sv.id, { x: SX, y: 84 + i * 70 }]),
-    ...arc.map((sv, i) => {
-      const t = i / (arc.length - 1);
-      return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: top + t * (H - 54 - top) }];
-    }),
-  ]);
+  const serverPos = new Map(SERVERS.map((sv, i) => {
+    if (i > 0) along += gaps[i - 1];
+    const t = along / span;
+    return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: 70 + t * (H - 124) }];
+  }));
 
   const svg = s('svg', { class: 'map', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Live map of tool calls from model agents to MCP servers' });
   const defs = s('defs');
