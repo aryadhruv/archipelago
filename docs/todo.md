@@ -91,8 +91,10 @@ Apply these in every grid.
 - **Dashboard** (`grid serve`): setup and preflight, Mission Control, the
   Live Map (live, focus with the world's files, replay), run detail,
   leaderboard and infra, on the API's REST endpoints and event stream.
-- **Examples on free models, text only.** `simple_task` and `examples/grid`
-  use the `animal_notes` text world and free OpenRouter models in every role.
+- **Examples on free models.** Three grid types, each with free OpenRouter
+  models that can do its task: text (`examples/grid/grid_text.json`), images
+  (`grid_images.json`, models that read images) and human-in-the-loop
+  (`examples/hil`). `simple_task` runs the text task.
   `simple_task`'s `mcp_config.json` now uses the server's venv Python over
   stdio, so it runs on a fresh clone.
 - **Simulated human** (`mcp_servers/human`, grid `human`): `ask_human`, with a

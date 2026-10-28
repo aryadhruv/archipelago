@@ -1,0 +1,15 @@
+{
+  "grid_id": "example_images",
+  "models": "models_images.json",
+  "tasks": [
+    "find_gorilla"
+  ],
+  "repeats": 1,
+  "max_parallel": 2,
+  "max_attempts": 3,
+  "port_base": 8100,
+  "judge": {
+    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free"
+  },
+  "output_dir": "runs"
+}

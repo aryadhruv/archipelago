@@ -1,0 +1,14 @@
+[
+  {
+    "id": "gemma-4-26b-free",
+    "label": "Gemma 4 26B (free)",
+    "model": "openrouter/google/gemma-4-26b-a4b-it:free",
+    "context_window_tokens": 262144
+  },
+  {
+    "id": "dots-3-note-free",
+    "label": "Dots 3 Note (free)",
+    "model": "openrouter/dots-studio/dots-3-note-preview:free",
+    "context_window_tokens": 512000
+  }
+]

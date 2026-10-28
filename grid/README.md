@@ -7,10 +7,10 @@ grid resumes where it left off.
 ```bash
 cd grid
 uv sync --locked
-uv run --locked python -m grid validate ../examples/grid/grid.json
-uv run --locked python -m grid run ../examples/grid/grid.json
-uv run --locked python -m grid status ../examples/grid/grid.json
-uv run --locked python -m grid serve ../examples/grid/grid.json   # dashboard API on 127.0.0.1:7070 (not 7000: macOS AirPlay listens there)
+uv run --locked python -m grid validate ../examples/grid/grid_text.json
+uv run --locked python -m grid run ../examples/grid/grid_text.json
+uv run --locked python -m grid status ../examples/grid/grid_text.json
+uv run --locked python -m grid serve ../examples/grid/grid_text.json   # dashboard API on 127.0.0.1:7070 (not 7000: macOS AirPlay listens there)
 ```
 
 `agents/.env` and `grading/.env` need the provider keys for the models and the

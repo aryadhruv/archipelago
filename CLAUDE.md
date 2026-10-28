@@ -28,7 +28,7 @@ cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 - Model strings look like `openrouter/anthropic/claude-sonnet-5.5`. The judge is set in `grading_settings.json` with `llm_judge_model`.
 - `mcp_config.json` needs the server's own venv Python (`/app/mcp_servers/<server>/.venv/bin/python`) and `MCP_TRANSPORT=stdio`. Without it you get `ModuleNotFoundError: mcp_schema`, or the server starts over HTTP on :5000.
 - With `ENV=local` and the env vars unset, Mercor-internal code paths are inactive: the LLM gateway, Mercor's document cache, cost ledgers, Datadog, Redis, Modal and webhooks.
-- The examples (`simple_task`, `grid`, `hil`) run text-only tasks on free OpenRouter models in every role, so any text model can run them.
+- The examples run on free OpenRouter models in every role. There are three grid types (text, images, human-in-the-loop; see `examples/README.md`), each with models that can do its task.
 
 ### Local patches
 
