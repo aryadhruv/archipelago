@@ -10,5 +10,17 @@
         "criteria": "The agent found and reported the correct path to the gorilla image: /animals/xk92m/qz7fw.png"
       }
     ]
+  },
+  {
+    "task_id": "find_gorilla_note",
+    "task_name": "Find the gorilla note",
+    "world_id": "animal_notes",
+    "prompt": "There are several subdirectories in this filesystem, each containing a text note about one animal. Read the notes, find the one about the gorilla, and tell me its full path.",
+    "rubric": [
+      {
+        "verifier_id": "ver_001",
+        "criteria": "The agent found and reported the correct path to the gorilla note: /animals/wd36k/tx8pl.txt"
+      }
+    ]
   }
 ]

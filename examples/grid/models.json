@@ -1,14 +1,14 @@
 [
   {
-    "id": "nemotron-super-vl-free",
-    "label": "Nemotron 3.5 Super VL (free)",
-    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free",
-    "context_window_tokens": 1000000
+    "id": "laguna-s-free",
+    "label": "Laguna S 2.1 (free)",
+    "model": "openrouter/poolside/laguna-s-2.1:free",
+    "context_window_tokens": 262144
   },
   {
-    "id": "haiku-5.5",
-    "label": "Haiku 5.5",
-    "model": "openrouter/anthropic/claude-haiku-5.5",
+    "id": "nemotron-3-ultra-free",
+    "label": "Nemotron 3 Ultra (free)",
+    "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
     "context_window_tokens": 1000000
   }
 ]

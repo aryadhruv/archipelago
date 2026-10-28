@@ -33,9 +33,6 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Small fixes
 
-- The committed `examples/simple_task/mcp_config.json` uses plain `python`
-  without `MCP_TRANSPORT=stdio`, so the example fails on a fresh clone with
-  `ModuleNotFoundError: mcp_schema`. Use the server's venv Python and stdio.
 - Optional: bind the environment port to `127.0.0.1` in
   `environment/docker-compose.yml`, so the sandbox isn't reachable from the
   network.
@@ -94,6 +91,10 @@ Apply these in every grid.
 - **Dashboard** (`grid serve`): setup and preflight, Mission Control, the
   Live Map (live, focus with the world's files, replay), run detail,
   leaderboard and infra, on the API's REST endpoints and event stream.
+- **Examples on free models, text only.** `simple_task` and `examples/grid`
+  use the `animal_notes` text world and free OpenRouter models in every role.
+  `simple_task`'s `mcp_config.json` now uses the server's venv Python over
+  stdio, so it runs on a fresh clone.
 - **Simulated human** (`mcp_servers/human`, grid `human`): `ask_human`, with a
   persona per world, a knowledge file, and file sharing into `/from_user/`.
 - **Leaderboard** (`GET /api/leaderboard`): mean score ± CI, pass rate,

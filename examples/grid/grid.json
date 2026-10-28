@@ -1,12 +1,14 @@
 {
   "grid_id": "example",
-  "tasks": "all",
+  "tasks": [
+    "find_gorilla_note"
+  ],
   "repeats": 1,
   "max_parallel": 2,
   "max_attempts": 3,
   "port_base": 8100,
   "judge": {
-    "model": "openrouter/anthropic/claude-sonnet-5.5"
+    "model": "openrouter/nvidia/nemotron-3.5-super-vl:free"
   },
   "output_dir": "runs"
 }
