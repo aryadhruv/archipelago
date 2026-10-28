@@ -49,7 +49,13 @@ def setup(tmp_path):
     )
     _write(
         tmp_path / "grid.json",
-        {"grid_id": "g", "repeats": 2, "judge": {"model": "j/j"}},
+        # With a simulated human, so the API serves what the demo fixtures show.
+        {
+            "grid_id": "g",
+            "repeats": 2,
+            "judge": {"model": "j/j"},
+            "human": {"model": "h/h"},
+        },
     )
     world = tmp_path / "world_files_zipped" / "w1.zip"
     world.parent.mkdir()
