@@ -6,7 +6,7 @@
     "task_id": "example_task_001",
     "eval_config_id": "ec_output_llm",
     "verifier_values": {
-      "criteria": "The agent found and reported the correct path to the gorilla image: /animals/xk92m/qz7fw.png",
+      "criteria": "The agent found and reported the correct path to the gorilla note: /animals/wd36k/tx8pl.txt",
       "is_primary_objective": true
     },
     "verifier_index": 0,

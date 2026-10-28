@@ -4,16 +4,19 @@ A minimal end-to-end example that demonstrates running an agent task and grading
 
 ## Task
 
-The agent is asked to explore a filesystem containing several subdirectories, each with an animal image file (with random names), and find the path to the gorilla image.
+The agent is asked to explore a filesystem containing several subdirectories, each with a text note about one animal (with random names), and find the path to the gorilla note. The task is text only, so any text model can run it.
 
 Directory structure:
 ```
 animals/
-  xk92m/qz7fw.png  (gorilla - the target)
-  ab47z/rt3ky.png  (cat)
-  mn83p/jw9vb.png  (elephant)
-  jh21q/pl4nc.png  (penguin)
+  wd36k/tx8pl.txt  (gorilla - the target)
+  rv58t/bk2wd.txt  (red fox)
+  ce71h/mz4qn.txt  (barn owl)
+  gn90s/hq5yc.txt  (grey heron)
 ```
+
+The agent is Nemotron 3 Ultra and the judge is Nemotron 3.5 Super VL, both free
+OpenRouter models (`OPENROUTER_API_KEY` in `agents/.env` and `grading/.env`).
 
 ## Quick Start
 
@@ -38,7 +41,7 @@ The script will:
 | `agent_config.json` | Agent configuration (loop_agent with defaults) |
 | `orchestrator_config.json` | Model and extra args for the agent |
 | `mcp_config.json` | MCP server configuration (filesystem only) |
-| `original_snapshot.zip` | World snapshot with animal image directories |
+| `original_snapshot.zip` | World snapshot with animal note directories |
 | `verifiers.json` | Grading criteria |
 | `eval_configs.json` | Eval definitions |
 | `grading_settings.json` | LLM judge settings |
@@ -328,7 +331,7 @@ After a successful run:
 - `final_snapshot.zip` - Final state of the filesystem
 - `grades.json` - Grading results with score and rationale
 
-The agent should find and report the path `/animals/xk92m/qz7fw.png` as the gorilla image.
+The agent should find and report the path `/animals/wd36k/tx8pl.txt` as the gorilla note.
 
 ## Troubleshooting & Notes
 

@@ -5,6 +5,6 @@
   },
   {
     "role": "user",
-    "content": "There are several subdirectories in this filesystem, each containing an image of an animal. Read each image file to view its contents, find the gorilla, and tell me its full path."
+    "content": "There are several subdirectories in this filesystem, each containing a text note about one animal. Read the notes, find the one about the gorilla, and tell me its full path."
   }
 ]
