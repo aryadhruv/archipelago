@@ -221,10 +221,10 @@ class SimulatedHuman:
                 return UNAVAILABLE
             try:
                 answer = await self._answer(question)
-            except Exception:
+            except Exception as e:
                 # A failed model call isn't the agent's fault and doesn't use
                 # up a question.
-                logger.exception("the human's model call failed")
+                logger.exception(f"the human's model call failed: {e!r}")
                 return UNAVAILABLE
             self.questions_asked += 1
             self.history += [
@@ -345,9 +345,9 @@ class SimulatedHuman:
         for path in map(str, paths):
             try:
                 result = await self.share_file(path)
-            except Exception:
+            except Exception as e:
                 # Retrying won't fix the environment: tell the agent instead.
-                logger.exception(f"could not upload {path!r}")
+                logger.exception(f"could not upload {path!r}: {e!r}")
                 failed.append(path)
                 continue
             if result.startswith("Error"):
