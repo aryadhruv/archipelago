@@ -11,7 +11,11 @@ the task. An LLM plays that person (`mcp_servers/human_server/sim.py`):
 - **How it answers:** through a `reply(answer, share)` tool. Only the paths in
   `share` are uploaded; the answer's wording never triggers a share. A wrong
   path gets it another try (3 model calls at most), and a plain-text answer
-  is taken as is, with nothing shared.
+  is taken as is, with nothing shared. A file it still can't share is named
+  in the reply, telling the agent to proceed without it.
+- **When it fails:** past the question cap, or when its model call fails
+  after retries, the agent is told the human is unavailable and to proceed.
+  A failed call doesn't count toward the cap.
 
 It runs outside the agent's sandbox (the grid starts it on the host, see
 `grid/grid/human.py`), so its provider key and its folder never enter it.

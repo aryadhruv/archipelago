@@ -100,7 +100,11 @@ Shared files are new files in the final state, so rubrics that check outputs
 should expect them under `/from_user/`.
 
 - The human keeps the conversation for the run, so follow-ups make sense.
-- Past `max_questions`, it replies that it isn't available.
+- Past `max_questions`, or when its model call fails after retries, it
+  replies that the human is unavailable and the agent should proceed. A
+  failed call doesn't use up a question.
+- If a file can't be shared (the upload fails, or it names a file it doesn't
+  have), the reply says so and tells the agent to proceed without it.
 - `validate` checks that its provider key is in `agents/.env`. Its token use
   is logged to the run's `human.log` only, not counted on the leaderboard.
 

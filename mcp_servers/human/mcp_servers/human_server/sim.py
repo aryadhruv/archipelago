@@ -28,7 +28,9 @@ MAX_ROUNDS = 3
 MAX_KNOWLEDGE_CHARS = 50_000
 MAX_LISTED_FILES = 300
 
-UNAVAILABLE = "The user isn't available right now. Use your best judgment."
+# Past the question cap, or when the human's model fails.
+UNAVAILABLE = "The human is unavailable at the moment. Please proceed with the task."
+SHARE_FAILED = "I'm unable to share {name} right now. Please proceed without it."
 
 # The human answers through this tool, so a file is shared only when it's
 # named in the call, never inferred from the wording of the answer.
@@ -217,94 +219,117 @@ class SimulatedHuman:
                 and self.questions_asked >= self.config.max_questions
             ):
                 return UNAVAILABLE
+            try:
+                answer = await self._answer(question)
+            except Exception:
+                # A failed model call isn't the agent's fault and doesn't use
+                # up a question.
+                logger.exception("the human's model call failed")
+                return UNAVAILABLE
             self.questions_asked += 1
-
-            messages: list[dict[str, Any]] = [
-                {"role": "system", "content": self.system_prompt()},
-                *self.history,
-                {"role": "user", "content": question},
-            ]
-            shared: list[str] = []
-            reply = ""
-            for round_ in range(MAX_ROUNDS):
-                # extra_args may raise num_retries, e.g. for a rate-limited free model.
-                response = await self._completion(
-                    model=self.config.model,
-                    messages=messages,
-                    tools=[REPLY_TOOL],
-                    **{"num_retries": 3, **self.config.extra_args},
-                )
-                message = response.choices[0].message
-                usage = getattr(response, "usage", None)
-                if usage is not None:
-                    logger.info(
-                        f"human usage: prompt={usage.prompt_tokens} "
-                        f"completion={usage.completion_tokens}"
-                    )
-                tool_calls = getattr(message, "tool_calls", None) or []
-                # A model that answers in plain text shares nothing.
-                reply = (message.content or "").strip()
-                if not tool_calls:
-                    break
-                answers, results = [], []
-                for call in tool_calls:
-                    answer, result = await self._reply(
-                        call.function.name, call.function.arguments, shared
-                    )
-                    answers.append(answer)
-                    results.append(result)
-                reply = "\n\n".join(a for a in answers if a) or reply
-                if all(r is None for r in results) or round_ == MAX_ROUNDS - 1:
-                    break
-                # Some files weren't shared: say why and let it reply again.
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": message.content,
-                        "tool_calls": [
-                            {
-                                "id": call.id,
-                                "type": "function",
-                                "function": {
-                                    "name": call.function.name,
-                                    "arguments": call.function.arguments,
-                                },
-                            }
-                            for call in tool_calls
-                        ],
-                    }
-                )
-                for call, result in zip(tool_calls, results, strict=True):
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": call.id,
-                            "content": result or "Delivered.",
-                        }
-                    )
-
-            # The agent always learns where shared files landed, whatever the
-            # model's reply says.
-            answer = (
-                "\n\n".join(
-                    part
-                    for part in [reply, "\n".join(f"Shared: {p}" for p in shared)]
-                    if part
-                )
-                or "(no answer)"
-            )
             self.history += [
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": answer},
             ]
             return answer
 
-    async def _reply(
-        self, name: str, arguments: str, shared: list[str]
-    ) -> tuple[str, str | None]:
-        """Run one reply call: its answer, and why it failed, or None.
+    async def _answer(self, question: str) -> str:
+        """One answer, sharing files along the way."""
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": self.system_prompt()},
+            *self.history,
+            {"role": "user", "content": question},
+        ]
+        shared: list[str] = []
+        # Files that couldn't be shared: the upload failed, or a path was
+        # still wrong after the last try.
+        failed: list[str] = []
+        reply = ""
+        for round_ in range(MAX_ROUNDS):
+            # extra_args may raise num_retries, e.g. for a rate-limited free model.
+            response = await self._completion(
+                model=self.config.model,
+                messages=messages,
+                tools=[REPLY_TOOL],
+                **{"num_retries": 3, **self.config.extra_args},
+            )
+            message = response.choices[0].message
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                logger.info(
+                    f"human usage: prompt={usage.prompt_tokens} "
+                    f"completion={usage.completion_tokens}"
+                )
+            tool_calls = getattr(message, "tool_calls", None) or []
+            # A model that answers in plain text shares nothing.
+            reply = (message.content or "").strip()
+            if not tool_calls:
+                break
+            answers, results, missing = [], [], []
+            for call in tool_calls:
+                answer, result = await self._reply(
+                    call.function.name,
+                    call.function.arguments,
+                    shared,
+                    failed,
+                    missing,
+                )
+                answers.append(answer)
+                results.append(result)
+            reply = "\n\n".join(a for a in answers if a) or reply
+            if all(r is None for r in results):
+                break
+            if round_ == MAX_ROUNDS - 1:
+                failed += missing
+                break
+            # Some files weren't shared: say why and let it reply again.
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": message.content,
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments,
+                            },
+                        }
+                        for call in tool_calls
+                    ],
+                }
+            )
+            for call, result in zip(tool_calls, results, strict=True):
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result or "Delivered.",
+                    }
+                )
 
-        Shared paths are added to ``shared``.
+        # The agent always learns where shared files landed, and which
+        # couldn't be shared, whatever the model's reply says.
+        names = dict.fromkeys(Path(p).name for p in failed)
+        notes = [
+            "\n".join(f"Shared: {p}" for p in shared),
+            " ".join(SHARE_FAILED.format(name=n) for n in names),
+        ]
+        return "\n\n".join(p for p in [reply, *notes] if p) or "(no answer)"
+
+    async def _reply(
+        self,
+        name: str,
+        arguments: str,
+        shared: list[str],
+        failed: list[str],
+        missing: list[str],
+    ) -> tuple[str, str | None]:
+        """Run one reply call: its answer, and what to tell the model, or None.
+
+        Paths the agent now sees go in ``shared``, uploads that failed in
+        ``failed``, and paths the human doesn't have in ``missing``.
         """
         if name != "reply":
             return "", f"Error: unknown tool {name!r}. Answer with reply."
@@ -317,10 +342,17 @@ class SimulatedHuman:
         if isinstance(paths, str):
             paths = [paths]
         errors = []
-        for path in paths:
-            result = await self.share_file(str(path))
+        for path in map(str, paths):
+            try:
+                result = await self.share_file(path)
+            except Exception:
+                # Retrying won't fix the environment: tell the agent instead.
+                logger.exception(f"could not upload {path!r}")
+                failed.append(path)
+                continue
             if result.startswith("Error"):
                 errors.append(result)
+                missing.append(path)
             elif result not in shared:
                 shared.append(result)
         if not errors:

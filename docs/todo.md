@@ -28,8 +28,9 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
    - Count the human's tokens per run (now only logged to the run's
      `human.log`).
    - Show questions asked per model on the leaderboard.
-   - A failed human model call reaches the agent as a tool error and counts
-     against the model. Decide whether to classify it as infra.
+   - A failed human model call tells the agent the human is unavailable, so
+     the agent carries on without an answer. Decide whether to flag those
+     runs as infra.
 
 ### Small fixes
 

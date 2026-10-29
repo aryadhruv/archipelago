@@ -40,8 +40,8 @@ Markdown, answered in the final answer), so any text model can run them.
 The human shares the judge's model but not its role, and isn't one of the
 models being tested.
 - **Retries:** free models rate-limit, so the human gets
-  `"extra_args": {"num_retries": 8}`. A human call that still fails reaches the
-  agent as a tool error and counts against the model. If you see `429` in a
-  run's `ask_human` results, rerun it.
+  `"extra_args": {"num_retries": 8}`. A human call that still fails tells
+  the agent the human is unavailable. If a run's `human.log` shows `429`s,
+  rerun it.
 - **Keys:** the human's provider key comes from `agents/.env`. The human runs
   on the host, so neither the key nor `.apps_data/human/` enters the sandbox.

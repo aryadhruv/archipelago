@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sim import REPLY_TOOL, UNAVAILABLE, SimulatedHuman
+from sim import REPLY_TOOL, SHARE_FAILED, UNAVAILABLE, SimulatedHuman
 from utils.config import DEFAULT_PERSONA, Config
 
 
@@ -207,9 +207,44 @@ async def test_every_round_keeps_tools(world):
         *[_response(tool_calls=[_reply("Here.", ["nope"], str(i))]) for i in range(3)]
     )
     answer = await SimulatedHuman(world, completion=completion).ask("File?")
-    assert answer == "Here."
+    # Still wrong after the last try: the agent is told it isn't coming.
+    assert answer == "Here.\n\n" + SHARE_FAILED.format(name="nope")
     assert len(completion.calls) == 3
     assert all(call["tools"] == [REPLY_TOOL] for call in completion.calls)
+
+
+async def test_failed_upload_tells_agent_to_proceed(world):
+    async def broken(name, data):
+        raise RuntimeError("populate refused it")
+
+    completion = FakeCompletion(
+        _response(tool_calls=[_reply("Here it is.", ["q3/budget.xlsx"])])
+    )
+    human = SimulatedHuman(world, completion=completion, upload=broken)
+    answer = await human.ask("Budget?")
+    assert answer == "Here it is.\n\n" + SHARE_FAILED.format(name="budget.xlsx")
+    # Not retried: another try won't fix the environment.
+    assert len(completion.calls) == 1
+
+
+async def test_failed_model_call_is_unavailable_and_not_counted(world):
+    world.max_questions = 1
+
+    class Flaky(FakeCompletion):
+        async def __call__(self, **kwargs):
+            if not self.calls:
+                self.calls.append(kwargs)
+                raise RuntimeError("429")
+            return await super().__call__(**kwargs)
+
+    completion = Flaky(_response("Friday."))
+    human = SimulatedHuman(world, completion=completion)
+    assert await human.ask("Due?") == UNAVAILABLE
+    assert await human.ask("Due?") == "Friday."
+    assert human.history == [
+        {"role": "user", "content": "Due?"},
+        {"role": "assistant", "content": "Friday."},
+    ]
 
 
 async def test_question_cap(world):
