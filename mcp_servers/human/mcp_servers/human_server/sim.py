@@ -124,19 +124,25 @@ def _agent_files(listing: Path | None) -> list[str]:
 
 
 def populate_upload(env_url: str, upload_dir: str) -> Upload:
-    """Upload a file into the agent's filesystem through /data/populate."""
+    """Upload a file into the agent's filesystem through /data/populate.
+
+    The tarball is extracted at the filesystem root with the member named
+    ``<upload_dir>/<name>``, not into ``<upload_dir>`` itself, so populate's
+    extraction filter resolves the upload folder too: if the agent turned it,
+    or the file, into a symlink out of the filesystem, the upload is refused.
+    """
 
     async def upload(name: str, data: bytes) -> None:
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
-            member = tarfile.TarInfo(name)
+            member = tarfile.TarInfo(f"{upload_dir}/{name}")
             member.size = len(data)
             member.mode = 0o644
             tar.addfile(member, io.BytesIO(data))
         async with httpx.AsyncClient(timeout=120) as http:
             resp = await http.post(
                 f"{env_url}/data/populate",
-                params={"subsystem": f"filesystem/{upload_dir}"},
+                params={"subsystem": "filesystem"},
                 files={
                     "archive": ("share.tar.gz", buffer.getvalue(), "application/gzip")
                 },

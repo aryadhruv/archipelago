@@ -128,10 +128,10 @@ async def test_populate_upload_posts_a_one_file_tarball(monkeypatch):
         lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
     )
     await populate_upload("http://env:8080", "from_user")("a.csv", b"x,y")
-    assert seen["url"] == (
-        "http://env:8080/data/populate?subsystem=filesystem%2Ffrom_user"
-    )
-    assert seen["files"] == {"a.csv": b"x,y"}
+    # Extracted at the filesystem root, so the extraction filter checks
+    # from_user/ itself for symlinks too.
+    assert seen["url"] == "http://env:8080/data/populate?subsystem=filesystem"
+    assert seen["files"] == {"from_user/a.csv": b"x,y"}
 
 
 async def test_ask_answers_and_keeps_history(world):

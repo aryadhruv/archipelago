@@ -114,8 +114,11 @@ however it gets past the code sandbox, because neither is in the container:
   and laid out on the host instead (`.cache/humans/`).
 - The server reads its key from `agents/.env` with dotenv, as the agent runner
   does. Nothing with a key is posted to the environment or written to the run.
-- Shared files go into the sandbox through the environment's
-  `/data/populate?subsystem=filesystem/from_user`.
+- Shared files go into the sandbox through the environment's `/data/populate`,
+  extracted at `/filesystem` as `from_user/<name>`. If the agent turns
+  `/from_user/` or a file in it into a symlink out of `/filesystem`, the share
+  is refused. A share does replace a file the agent itself wrote at the same
+  path.
 - The sandbox reaches the server at `host.docker.internal` (mapped to
   `host-gateway` on every container), under a random path token per run.
   With the token, a caller can only ask the human, which the agent can
