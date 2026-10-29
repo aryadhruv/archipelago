@@ -206,6 +206,17 @@ def env_file_values() -> dict[str, str]:
     return values
 
 
+_REACH_CHECK = """
+import sys, urllib.error, urllib.request
+try:
+    urllib.request.urlopen(sys.argv[1], timeout=5)
+except urllib.error.HTTPError:
+    pass
+except Exception as e:
+    sys.exit(repr(e))
+"""
+
+
 class Environment:
     def __init__(self, port: int, image: str):
         self.port = port
@@ -230,6 +241,9 @@ class Environment:
             # The default bridge, not a network per container: Docker runs
             # out of address pools after a few dozen networks.
             network_mode="bridge",
+            # The simulated human runs on the host (see human.py); Docker
+            # Desktop has this name already, native Linux needs it mapped.
+            extra_hosts={"host.docker.internal": "host-gateway"},
             labels={OWNER_LABEL: str(os.getpid())},
         )
 
@@ -294,6 +308,23 @@ class Environment:
                 f"populate {subsystem} failed: {resp.status_code} {resp.text[:500]}"
             )
         return resp.json()
+
+    async def check_reaches(self, url: str) -> None:
+        """Fail fast if the sandbox can't reach a server on the host.
+
+        Any HTTP answer counts; otherwise /apps would wait minutes for it.
+        """
+        assert self.container is not None
+        result = await asyncio.to_thread(
+            self.container.exec_run, ["python", "-c", _REACH_CHECK, url]
+        )
+        if result.exit_code != 0:
+            raise InfraError(
+                f"the sandbox can't reach {url}: "
+                f"{result.output.decode(errors='replace').strip()[-300:]}. On "
+                "Linux, a firewall may drop traffic from Docker's bridge to the "
+                "host (e.g. ufw: allow in on docker0)."
+            )
 
     async def configure_apps(self, mcp_config: dict[str, Any]) -> None:
         async with httpx.AsyncClient(timeout=900) as client:

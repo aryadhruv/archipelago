@@ -4,17 +4,23 @@ import zipfile
 
 import pytest
 
+from grid import human as human_module
+from grid.human import HumanServer, bind_address
 from grid.inputs import (
     HUMAN_SERVER,
     InputError,
     agent_config_for,
     load_grid,
-    provider_env,
     run_mcp_config,
     verifiers_for,
 )
 from grid.scheduler import grid_order
-from grid.worlds import overlay_tarballs, tar_gz_to_zip, world_tarballs
+from grid.worlds import (
+    human_folder,
+    overlay_tarballs,
+    tar_gz_to_zip,
+    world_tarballs,
+)
 
 
 def _write(path, value):
@@ -153,7 +159,7 @@ def test_no_human_leaves_mcp_config_alone(grid_dir):
     grid = load_grid(grid_dir / "grid.json")
     assert grid.human is None
     assert HUMAN_SERVER not in grid.mcp_config["mcpServers"]
-    assert run_mcp_config(grid, grid.tasks[0], {}) is grid.mcp_config
+    assert run_mcp_config(grid) is grid.mcp_config
     assert "ask_human" not in grid.system_prompt
 
 
@@ -162,56 +168,105 @@ def test_human_needs_a_model(grid_dir):
         _with_human(grid_dir, {"max_questions": 3})
 
 
-def test_human_fills_the_run_config(grid_dir):
+def test_human_run_config_points_at_the_host(grid_dir):
     grid = _with_human(
         grid_dir,
-        {"model": "openrouter/x/h", "extra_args": {"temperature": 0}},
+        {"model": "openrouter/x/h"},
         [{"world_id": "w1", "human": {"persona": "Terse manager."}}],
     )
     assert grid.human.max_questions is None
     assert grid.personas == {"w1": "Terse manager."}
     assert "human_server_ask_human" in grid.system_prompt
-    # Listed with the grid's servers, without per-run values.
-    template = grid.mcp_config["mcpServers"][HUMAN_SERVER]
-    assert "HUMAN_MODEL" not in template["env"]
+    # Listed with the grid's servers until each run's URL replaces it.
+    assert grid.mcp_config["mcpServers"][HUMAN_SERVER]["transport"] == "http"
 
-    config = run_mcp_config(grid, grid.tasks[0], {"OPENROUTER_API_KEY": "sk-x"})
-    env = config["mcpServers"][HUMAN_SERVER]["env"]
+    url = "http://host.docker.internal:4321/tok/mcp"
+    config = run_mcp_config(grid, url)
+    assert config["mcpServers"][HUMAN_SERVER] == {"transport": "http", "url": url}
+    # The human runs on the host: nothing in the sandbox's config carries env.
+    assert "env" not in config["mcpServers"][HUMAN_SERVER]
+    others = {k: v for k, v in config["mcpServers"].items() if k != HUMAN_SERVER}
+    assert others == {
+        k: v for k, v in grid.mcp_config["mcpServers"].items() if k != HUMAN_SERVER
+    }
+
+
+def test_human_server_env(grid_dir, tmp_path):
+    grid = _with_human(
+        grid_dir,
+        {
+            "model": "openrouter/x/h",
+            "extra_args": {"temperature": 0},
+            "max_questions": 2,
+        },
+        [{"world_id": "w1", "human": {"persona": "Terse manager."}}],
+    )
+    folder = tmp_path / "folder"
+    server = HumanServer(
+        grid, grid.tasks[0], folder, "http://localhost:8200", tmp_path / "h.log"
+    )
+    env = server._env("127.0.0.1", 4321, "/tok/mcp")
     assert env["HUMAN_MODEL"] == "openrouter/x/h"
     assert json.loads(env["HUMAN_EXTRA_ARGS"]) == {"temperature": 0}
     assert env["HUMAN_PERSONA"] == "Terse manager."
     assert env["HUMAN_TASK_PROMPT"] == "Find it."
-    assert env["HUMAN_MAX_QUESTIONS"] == ""
-    assert env["HUMAN_DATA_ROOT"] == "/.apps_data/human"
-    assert env["OPENROUTER_API_KEY"] == "sk-x"
-    # Keys never land in the grid's shared config.
-    assert "OPENROUTER_API_KEY" not in json.dumps(grid.mcp_config)
-    # Other servers get no keys.
-    others = [s for name, s in config["mcpServers"].items() if name != HUMAN_SERVER]
-    assert "sk-x" not in json.dumps(others)
-
-
-def test_human_cap_and_default_persona(grid_dir):
-    grid = _with_human(grid_dir, {"model": "openrouter/x/h", "max_questions": 2})
-    env = run_mcp_config(grid, grid.tasks[0], {})["mcpServers"][HUMAN_SERVER]["env"]
     assert env["HUMAN_MAX_QUESTIONS"] == "2"
+    assert env["HUMAN_DATA_ROOT"] == str(folder / "human")
+    assert env["HUMAN_AGENT_FILES"] == str(folder / "agent_files.txt")
+    assert env["HUMAN_ENV_URL"] == "http://localhost:8200"
+    assert env["HUMAN_ENV_FILE"].endswith("agents/.env")
+    assert (env["MCP_HOST"], env["MCP_PORT"], env["MCP_PATH"]) == (
+        "127.0.0.1",
+        "4321",
+        "/tok/mcp",
+    )
+
+
+def test_human_default_persona_is_empty(grid_dir, tmp_path):
+    grid = _with_human(grid_dir, {"model": "openrouter/x/h"})
+    server = HumanServer(grid, grid.tasks[0], tmp_path, "http://e", tmp_path / "h.log")
+    env = server._env("127.0.0.1", 1, "/p")
     # Empty: the server falls back to its default persona.
     assert env["HUMAN_PERSONA"] == ""
+    assert env["HUMAN_MAX_QUESTIONS"] == ""
 
 
-def test_provider_env_reads_only_provider_vars(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "from-env")
-    env_file = tmp_path / ".env"
-    env_file.write_text(
-        "# comment\n"
-        "OPENROUTER_API_KEY='sk-file'\n"
-        "export ANTHROPIC_API_KEY=from-file\n"
-        "OPENAI_API_BASE=http://x\n"
-        "FILE_LOGGING=true\n"
-    )
-    env = provider_env(env_file)
-    assert env["OPENROUTER_API_KEY"] == "sk-file"
-    assert env["ANTHROPIC_API_KEY"] == "from-env"
-    assert env["OPENAI_API_BASE"] == "http://x"
-    assert "FILE_LOGGING" not in env
+def test_human_folder_stays_out_of_the_tarballs(tmp_path):
+    world = tmp_path / "w.zip"
+    with zipfile.ZipFile(world, "w") as zf:
+        zf.writestr("filesystem/docs/a.txt", "hello")
+        zf.writestr(".apps_data/mail/inbox.mbox", "From x")
+        zf.writestr(".apps_data/human/knowledge.md", "world notes")
+        zf.writestr(".apps_data/human/files/list.csv", "a,b")
+    overlay = tmp_path / "task_files" / "t1"
+    (overlay / ".apps_data" / "human").mkdir(parents=True)
+    (overlay / ".apps_data" / "human" / "knowledge.md").write_text("task notes")
+    (overlay / "filesystem").mkdir()
+    (overlay / "filesystem" / "b.txt").write_text("b")
+
+    cache = tmp_path / "cache"
+    with tarfile.open(world_tarballs(world, cache)[".apps_data"]) as tar:
+        assert tar.getnames() == ["mail/inbox.mbox"]
+    assert ".apps_data" not in overlay_tarballs(overlay, cache)
+
+    folder = human_folder(world, overlay, cache)
+    # The overlay's knowledge wins; the world's files stay.
+    assert (folder / "human" / "knowledge.md").read_text() == "task notes"
+    assert (folder / "human" / "files" / "list.csv").read_text() == "a,b"
+    assert (folder / "agent_files.txt").read_text() == "b.txt\ndocs/a.txt\n"
+    assert human_folder(world, overlay, cache) == folder
+    # Without an overlay, the world's alone.
+    plain = human_folder(world, tmp_path / "missing", cache)
+    assert (plain / "human" / "knowledge.md").read_text() == "world notes"
+
+
+def test_bind_address_falls_back_to_loopback(monkeypatch):
+    def no_docker():
+        raise human_module.DockerException("no docker")
+
+    bind_address.cache_clear()
+    monkeypatch.setattr(human_module, "client", no_docker)
+    try:
+        assert bind_address() == "127.0.0.1"
+    finally:
+        bind_address.cache_clear()

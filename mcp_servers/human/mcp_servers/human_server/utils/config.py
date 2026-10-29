@@ -21,10 +21,14 @@ class Config:
     persona: str = DEFAULT_PERSONA
     task_prompt: str = ""
     max_questions: int | None = None
-    # The human's own folder (knowledge.md, files/). The agent can't reach it.
-    data_root: Path = Path("/.apps_data/human")
-    # The agent's filesystem root, and the folder under it that shared files land in.
-    fs_root: Path = Path("/filesystem")
+    # The human's own folder (knowledge.md, files/), on the host: it never
+    # enters the agent's sandbox.
+    data_root: Path = Path("human")
+    # The agent's file paths, one per line, so the human can point to them.
+    agent_files: Path | None = None
+    # The agent's environment; shared files are posted to its /data/populate.
+    env_url: str = "http://localhost:8080"
+    # The folder under the agent's filesystem root that shared files land in.
     upload_dir: str = "from_user"
 
     @property
@@ -34,13 +38,15 @@ class Config:
 
 def load_config() -> Config:
     max_questions = os.getenv("HUMAN_MAX_QUESTIONS", "").strip()
+    agent_files = os.getenv("HUMAN_AGENT_FILES", "").strip()
     return Config(
         model=os.getenv("HUMAN_MODEL", ""),
         extra_args=json.loads(os.getenv("HUMAN_EXTRA_ARGS") or "{}"),
         persona=os.getenv("HUMAN_PERSONA", "").strip() or DEFAULT_PERSONA,
         task_prompt=os.getenv("HUMAN_TASK_PROMPT", "").strip(),
         max_questions=int(max_questions) if max_questions else None,
-        data_root=Path(os.getenv("HUMAN_DATA_ROOT", "/.apps_data/human")),
-        fs_root=Path(os.getenv("HUMAN_FS_ROOT", "/filesystem")),
+        data_root=Path(os.getenv("HUMAN_DATA_ROOT", "human")),
+        agent_files=Path(agent_files) if agent_files else None,
+        env_url=os.getenv("HUMAN_ENV_URL", "http://localhost:8080").rstrip("/"),
         upload_dir=os.getenv("HUMAN_UPLOAD_DIR", "from_user").strip("/"),
     )

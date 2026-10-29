@@ -2,18 +2,23 @@
 
 Like a real person, it doesn't open its files to answer. It answers from what it
 knows (the task, its persona, knowledge.md), points to paths in the agent's
-files, or shares one of its own files, which copies it into the agent's
+files, or shares one of its own files, which uploads it into the agent's
 filesystem under ``from_user/``.
+
+It runs outside the agent's sandbox, so its provider key and its files never
+enter it: shared files go in through the environment's /data/populate.
 """
 
 import asyncio
+import io
 import json
 import re
-import shutil
+import tarfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+import httpx
 import litellm
 from loguru import logger
 from utils.config import Config
@@ -90,17 +95,55 @@ volunteer the full solution.
 """
 
 
-def _listing(root: Path, sizes: bool) -> list[str]:
+Upload = Callable[[str, bytes], Awaitable[None]]
+
+
+def _capped(lines: list[str]) -> list[str]:
+    if len(lines) > MAX_LISTED_FILES:
+        return [*lines[:MAX_LISTED_FILES], "- ... (more not shown)"]
+    return lines
+
+
+def _own_files(root: Path) -> list[str]:
     if not root.is_dir():
         return []
-    lines = []
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        rel = path.relative_to(root).as_posix()
-        lines.append(f"- {rel} ({path.stat().st_size} bytes)" if sizes else f"- /{rel}")
-        if len(lines) == MAX_LISTED_FILES:
-            lines.append("- ... (more not shown)")
-            break
-    return lines
+    return _capped(
+        [
+            f"- {p.relative_to(root).as_posix()} ({p.stat().st_size} bytes)"
+            for p in sorted(root.rglob("*"))
+            if p.is_file()
+        ]
+    )
+
+
+def _agent_files(listing: Path | None) -> list[str]:
+    if listing is None or not listing.is_file():
+        return []
+    paths = [line.strip() for line in listing.read_text().splitlines()]
+    return _capped([f"- /{p.lstrip('/')}" for p in paths if p])
+
+
+def populate_upload(env_url: str, upload_dir: str) -> Upload:
+    """Upload a file into the agent's filesystem through /data/populate."""
+
+    async def upload(name: str, data: bytes) -> None:
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            member.mode = 0o644
+            tar.addfile(member, io.BytesIO(data))
+        async with httpx.AsyncClient(timeout=120) as http:
+            resp = await http.post(
+                f"{env_url}/data/populate",
+                params={"subsystem": f"filesystem/{upload_dir}"},
+                files={
+                    "archive": ("share.tar.gz", buffer.getvalue(), "application/gzip")
+                },
+            )
+        resp.raise_for_status()
+
+    return upload
 
 
 class SimulatedHuman:
@@ -108,9 +151,14 @@ class SimulatedHuman:
         self,
         config: Config,
         completion: Callable[..., Awaitable[Any]] = litellm.acompletion,
+        upload: Upload | None = None,
     ) -> None:
         self.config = config
         self._completion = completion
+        self._upload = upload or populate_upload(config.env_url, config.upload_dir)
+        # Name each shared file got in from_user/, so two files with the same
+        # name from different folders don't overwrite each other.
+        self._shared_names: dict[Path, str] = {}
         # Earlier questions and answers in this run, so follow-ups stay coherent.
         self.history: list[dict[str, Any]] = []
         self.questions_asked = 0
@@ -128,14 +176,23 @@ class SimulatedHuman:
             persona=self.config.persona,
             task_prompt=self.config.task_prompt or "(not given)",
             knowledge=knowledge or "Nothing beyond the task itself.",
-            own_files="\n".join(_listing(self.config.files_root, sizes=True))
-            or "(none)",
-            agent_files="\n".join(_listing(self.config.fs_root, sizes=False))
-            or "(none)",
+            own_files="\n".join(_own_files(self.config.files_root)) or "(none)",
+            agent_files="\n".join(_agent_files(self.config.agent_files)) or "(none)",
         )
 
-    def share_file(self, path: str) -> str:
-        """Copy one of the human's files into the agent's filesystem.
+    def _name_for(self, src: Path) -> str:
+        if src in self._shared_names:
+            return self._shared_names[src]
+        taken = set(self._shared_names.values())
+        name, n = src.name, 2
+        while name in taken:
+            name = f"{src.stem}-{n}{src.suffix}"
+            n += 1
+        self._shared_names[src] = name
+        return name
+
+    async def share_file(self, path: str) -> str:
+        """Upload one of the human's files into the agent's filesystem.
 
         Returns the path the agent sees, or an error message for the model.
         """
@@ -143,10 +200,9 @@ class SimulatedHuman:
         src = (root / path.lstrip("/")).resolve()
         if not src.is_relative_to(root) or not src.is_file():
             return f"Error: you have no file at {path!r}."
-        dest_dir = self.config.fs_root / self.config.upload_dir
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, dest_dir / src.name)
-        return f"/{self.config.upload_dir}/{src.name}"
+        name = self._name_for(src)
+        await self._upload(name, src.read_bytes())
+        return f"/{self.config.upload_dir}/{name}"
 
     async def ask(self, question: str) -> str:
         if not self.config.model:
@@ -214,7 +270,9 @@ class SimulatedHuman:
                     }
                 )
                 for call in tool_calls:
-                    result = self._run_tool(call.function.name, call.function.arguments)
+                    result = await self._run_tool(
+                        call.function.name, call.function.arguments
+                    )
                     if not result.startswith("Error") and result not in shared:
                         shared.append(result)
                     messages.append(
@@ -247,11 +305,11 @@ class SimulatedHuman:
             name.lower() in lowered for name in names
         )
 
-    def _run_tool(self, name: str, arguments: str) -> str:
+    async def _run_tool(self, name: str, arguments: str) -> str:
         if name != "share_file":
             return f"Error: unknown tool {name!r}."
         try:
             path = json.loads(arguments or "{}").get("path", "")
         except json.JSONDecodeError:
             return "Error: arguments must be JSON with a 'path'."
-        return self.share_file(str(path))
+        return await self.share_file(str(path))

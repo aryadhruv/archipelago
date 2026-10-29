@@ -70,10 +70,13 @@ what we removed.
   `ask_human(question)` MCP tool lets the model being tested ask the person
   who assigned the task. An LLM plays that person, from the task prompt, a
   persona in `world_descriptions.json`, and `.apps_data/human/knowledge.md`.
-  It shares files from `.apps_data/human/files/` by copying them to
-  `/from_user/` rather than reading them. The grid copies the provider keys
-  from `agents/.env` into that server's environment only. Before this, the
-  grid never read keys. See `grid/README.md`.
+  It shares files from `.apps_data/human/files/` by uploading them to
+  `/from_user/` rather than reading them. It runs on the host, one server per
+  agent attempt, which the sandbox's gateway reaches over HTTP at
+  `host.docker.internal`; its provider key (from `agents/.env`) and its folder
+  never enter the container. Grid containers map `host.docker.internal` to
+  `host-gateway`, and `.apps_data/human/` is left out of populate. See
+  `grid/README.md`.
 
 ## Fixed
 

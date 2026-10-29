@@ -76,9 +76,6 @@ RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(
  && ( cd /app/mcp_servers/filesystem && uv sync --all-extras ) \
  && rm -f ~/.gitconfig
 
-# Install: human
-RUN ( cd /app/mcp_servers/human && uv sync --locked --no-dev )
-
 # Install: pdfs
 RUN --mount=type=secret,id=github_token,required=false export UV_GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null) && if [ -n "$UV_GITHUB_TOKEN" ]; then git config --global url."https://x-access-token:${UV_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; fi \
  && ( cd /app/mcp_servers/pdfs && uv sync --all-extras ) \

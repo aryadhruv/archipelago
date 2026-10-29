@@ -25,8 +25,8 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
    they can't run as shipped. Either remove them or pair each with a server.
 
 3. **Simulated human follow-ups.**
-   - Count the human's tokens per run (now only logged to the environment's
-     stderr).
+   - Count the human's tokens per run (now only logged to the run's
+     `human.log`).
    - Show questions asked per model on the leaderboard.
    - A failed human model call reaches the agent as a tool error and counts
      against the model. Decide whether to classify it as infra.

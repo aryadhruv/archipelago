@@ -18,6 +18,14 @@ def _share(path, call_id="c1"):
     return SimpleNamespace(id=call_id, function=function)
 
 
+class FakeUpload:
+    def __init__(self):
+        self.files: dict[str, bytes] = {}
+
+    async def __call__(self, name, data):
+        self.files[name] = data
+
+
 class FakeCompletion:
     def __init__(self, *responses):
         self.responses = list(responses)
@@ -33,16 +41,22 @@ def world(tmp_path: Path) -> Config:
     data = tmp_path / "human"
     (data / "files" / "q3").mkdir(parents=True)
     (data / "files" / "q3" / "budget.xlsx").write_bytes(b"secret-bytes")
+    (data / "files" / "q4").mkdir()
+    (data / "files" / "q4" / "budget.xlsx").write_bytes(b"q4-bytes")
     (data / "knowledge.md").write_text("The deadline is Friday.")
-    (tmp_path / "fs" / "reports").mkdir(parents=True)
-    (tmp_path / "fs" / "reports" / "draft.md").write_text("draft")
+    (tmp_path / "agent_files.txt").write_text("reports/draft.md\n")
     (tmp_path / "secret.txt").write_text("outside")
     return Config(
         model="test/model",
         task_prompt="Write the summary.",
         data_root=data,
-        fs_root=tmp_path / "fs",
+        agent_files=tmp_path / "agent_files.txt",
     )
+
+
+@pytest.fixture
+def upload() -> FakeUpload:
+    return FakeUpload()
 
 
 def test_system_prompt(world):
@@ -63,18 +77,61 @@ def test_persona_override(world):
     assert DEFAULT_PERSONA not in prompt
 
 
-def test_share_file_copies_into_agent_fs(world):
-    human = SimulatedHuman(world)
-    assert human.share_file("q3/budget.xlsx") == "/from_user/budget.xlsx"
-    assert (world.fs_root / "from_user" / "budget.xlsx").read_bytes() == b"secret-bytes"
+async def test_share_file_uploads_into_agent_fs(world, upload):
+    human = SimulatedHuman(world, upload=upload)
+    assert await human.share_file("q3/budget.xlsx") == "/from_user/budget.xlsx"
+    assert upload.files == {"budget.xlsx": b"secret-bytes"}
+
+
+async def test_share_file_keeps_same_names_apart(world, upload):
+    human = SimulatedHuman(world, upload=upload)
+    assert await human.share_file("q3/budget.xlsx") == "/from_user/budget.xlsx"
+    assert await human.share_file("q4/budget.xlsx") == "/from_user/budget-2.xlsx"
+    # Sharing the same file again keeps its name.
+    assert await human.share_file("q3/budget.xlsx") == "/from_user/budget.xlsx"
+    assert upload.files == {
+        "budget.xlsx": b"secret-bytes",
+        "budget-2.xlsx": b"q4-bytes",
+    }
 
 
 @pytest.mark.parametrize(
     "path", ["../knowledge.md", "../../secret.txt", "nope.txt", "q3"]
 )
-def test_share_file_rejects_outside_or_missing(world, path):
-    assert SimulatedHuman(world).share_file(path).startswith("Error")
-    assert not (world.fs_root / "from_user").exists()
+async def test_share_file_rejects_outside_or_missing(world, upload, path):
+    human = SimulatedHuman(world, upload=upload)
+    assert (await human.share_file(path)).startswith("Error")
+    assert upload.files == {}
+
+
+async def test_populate_upload_posts_a_one_file_tarball(monkeypatch):
+    import io
+    import tarfile
+
+    import httpx
+    from sim import populate_upload
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        body = request.read()
+        start = body.index(b"\x1f\x8b")
+        with tarfile.open(fileobj=io.BytesIO(body[start:]), mode="r:gz") as tar:
+            seen["files"] = {m.name: tar.extractfile(m).read() for m in tar}
+        return httpx.Response(200, json={})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
+    )
+    await populate_upload("http://env:8080", "from_user")("a.csv", b"x,y")
+    assert seen["url"] == (
+        "http://env:8080/data/populate?subsystem=filesystem%2Ffrom_user"
+    )
+    assert seen["files"] == {"a.csv": b"x,y"}
 
 
 async def test_ask_answers_and_keeps_history(world):
@@ -93,7 +150,7 @@ async def test_ask_shares_file_and_reports_path(world):
         _response(tool_calls=[_share("q3/budget.xlsx")]),
         _response("Sent you the budget."),
     )
-    human = SimulatedHuman(world, completion=completion)
+    human = SimulatedHuman(world, completion=completion, upload=FakeUpload())
     answer = await human.ask("Do you have the budget?")
     assert answer == "Sent you the budget.\n\nShared: /from_user/budget.xlsx"
     tool_message = completion.calls[1]["messages"][-1]
@@ -123,7 +180,8 @@ async def test_claimed_share_without_tool_call_is_nudged(world):
         _response(tool_calls=[_share("q3/budget.xlsx")]),
         _response("Sent."),
     )
-    answer = await SimulatedHuman(world, completion=completion).ask("Budget?")
+    human = SimulatedHuman(world, completion=completion, upload=FakeUpload())
+    answer = await human.ask("Budget?")
     assert answer == "Sent.\n\nShared: /from_user/budget.xlsx"
     assert {"role": "user", "content": SHARE_NUDGE} in completion.calls[1]["messages"]
 

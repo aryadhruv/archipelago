@@ -43,4 +43,5 @@ models being tested.
   `"extra_args": {"num_retries": 8}`. A human call that still fails reaches the
   agent as a tool error and counts against the model. If you see `429` in a
   run's `ask_human` results, rerun it.
-- **Keys:** the human's provider key comes from `agents/.env`.
+- **Keys:** the human's provider key comes from `agents/.env`. The human runs
+  on the host, so neither the key nor `.apps_data/human/` enters the sandbox.

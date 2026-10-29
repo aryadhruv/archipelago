@@ -14,8 +14,9 @@ uv run --locked python -m grid serve ../examples/grid/grid_text.json   # dashboa
 ```
 
 `agents/.env` and `grading/.env` need the provider keys for the models and the
-judge, as for the examples. Each runner reads its own file. The grid itself
-reads keys only for the simulated human (`human`, below), from `agents/.env`. `validate` asks each runner whether its keys are present and
+judge, as for the examples. Each runner reads its own file, and so does the
+simulated human (`human`, below), from `agents/.env`. The grid itself never
+reads keys. `validate` asks each runner whether its keys are present and
 prints only the key names that are missing.
 
 ## Inputs
@@ -91,22 +92,44 @@ the grid) plays that person. It knows:
   knows from memory
 - the names of the files in `.apps_data/human/files/`. It doesn't read them.
   Like a person, it answers from memory, points to a path in the agent's files,
-  or shares one of its own files. A shared file is copied to `/from_user/<name>`
-  in the agent's filesystem, and the reply ends with `Shared: /from_user/<name>`.
+  or shares one of its own files. A shared file is uploaded to
+  `/from_user/<name>` in the agent's filesystem (two files with the same name
+  get `name-2.ext`), and the reply ends with `Shared: /from_user/<name>`.
 
-The model being tested can't read `.apps_data/human/`: the code sandbox blocks
-`/.apps_data`, and the filesystem server only sees `/filesystem`. Shared files
-are new files in the final state, so rubrics that check outputs should expect
-them under `/from_user/`.
+Shared files are new files in the final state, so rubrics that check outputs
+should expect them under `/from_user/`.
 
 - The human keeps the conversation for the run, so follow-ups make sense.
 - Past `max_questions`, it replies that it isn't available.
-- Its model calls use the provider keys from `agents/.env` (and the
-  environment). The grid passes them into that one server's environment for
-  the run. They're never written to disk, and the code sandbox's env scrub
-  keeps them from model-run code.
-- `validate` checks that the key is there. The human's token use is logged to
-  the environment's stderr only, not counted on the leaderboard.
+- `validate` checks that its provider key is in `agents/.env`. Its token use
+  is logged to the run's `human.log` only, not counted on the leaderboard.
+
+**Where it runs.** The human runs on the host, outside the sandbox, the same
+way the agent runner does. The grid starts one human server per agent attempt
+(`grid/grid/human.py`) and points `human_server` in `/apps` at it over HTTP.
+Model code in the sandbox can't read the human's provider key or its folder,
+however it gets past the code sandbox, because neither is in the container:
+
+- `.apps_data/human/` is left out of the tarballs the sandbox is populated with
+  and laid out on the host instead (`.cache/humans/`).
+- The server reads its key from `agents/.env` with dotenv, as the agent runner
+  does. Nothing with a key is posted to the environment or written to the run.
+- Shared files go into the sandbox through the environment's
+  `/data/populate?subsystem=filesystem/from_user`.
+- The sandbox reaches the server at `host.docker.internal` (mapped to
+  `host-gateway` on every container), under a random path token per run.
+  With the token, a caller can only ask the human, which the agent can
+  already do.
+- The server listens on the default bridge's gateway on native Linux (for
+  example `172.17.0.1`), and on `127.0.0.1` with Docker Desktop, where the
+  bridge is in a VM. Never on `0.0.0.0`.
+- It stops with its run, and on its own if the grid process dies.
+- The grid installs its dependencies (`uv sync --locked` in
+  `mcp_servers/human`) when a grid with `human` starts. Nothing to set up.
+
+On Linux, a firewall that drops traffic from Docker's bridge to the host (ufw's
+default) blocks it. The run then fails at `apps_starting` with "the sandbox
+can't reach ...". Allow it with `sudo ufw allow in on docker0`.
 
 ## What a run does
 

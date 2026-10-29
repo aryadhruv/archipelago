@@ -5,7 +5,8 @@ The inputs folder holds the same files as the ``mercor/apex-agents`` dataset:
     tasks_and_rubrics.json            [{task_id, task_name, world_id, prompt, rubric, ...}]
     world_descriptions.json           [{world_id, human?: {persona}, ...}] (optional)
     world_files_zipped/<world_id>.zip filesystem/ and optional .apps_data/
-                                      (.apps_data/human/ is the simulated human's)
+                                      (.apps_data/human/ is the simulated human's;
+                                      it stays on the host, see worlds.py)
     task_files/<task_id>/             optional per-task overlay, same two subsystems
 
 Relative paths in grid.json resolve against the folder grid.json is in.
@@ -13,7 +14,6 @@ Relative paths in grid.json resolve against the folder grid.json is in.
 
 import copy
 import json
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,9 +23,6 @@ DEFAULTS_DIR = Path(__file__).parent / "defaults"
 REPO_DIR = Path(__file__).resolve().parents[2]
 
 HUMAN_SERVER = "human_server"
-# Provider settings the simulated human's model may need, copied from
-# agents/.env into that one server's environment.
-_PROVIDER_VAR = re.compile(r"^[A-Z0-9_]+_(API_KEY|API_BASE|BASE_URL)$")
 
 # Model ids name run directories and run ids, so keep them path-safe.
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -264,10 +261,10 @@ def load_grid(config_path: Path) -> Grid:
     grid.human = _load_human(cfg.get("human"))
     if grid.human is not None:
         grid.personas = _load_personas(inputs_dir)
-        # The server entry without its per-run env (see run_mcp_config), so
-        # every list of the grid's servers includes it.
+        # A placeholder until each run's URL (see run_mcp_config), so every
+        # list of the grid's servers includes it.
         servers = grid.mcp_config.setdefault("mcpServers", {})
-        servers.setdefault(HUMAN_SERVER, _read_json(DEFAULTS_DIR / "human_server.json"))
+        servers[HUMAN_SERVER] = _read_json(DEFAULTS_DIR / "human_server.json")
         # The toolbelt hides tools until the model lists them, and models
         # otherwise ask in chat, which ends the run. Every model gets this.
         human_prompt = (DEFAULTS_DIR / "human_prompt.md").read_text().strip()
@@ -307,45 +304,13 @@ def verifiers_for(task: Task) -> list[dict[str, Any]]:
     ]
 
 
-def provider_env(env_file: Path = REPO_DIR / "agents" / ".env") -> dict[str, str]:
-    """Provider keys and endpoints from agents/.env; variables already set win.
+def run_mcp_config(grid: Grid, human_url: str | None = None) -> dict[str, Any]:
+    """The MCP config for one run: human_server pointed at this run's simulated human.
 
-    Read the way the agent runner reads its own .env, so the simulated human
-    uses the same keys as the models being tested.
+    The human runs on the host (see human.py), so the config holds no keys.
     """
-    values: dict[str, str] = {}
-    if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            name, _, value = line.removeprefix("export ").partition("=")
-            values[name.strip()] = value.strip().strip("'\"")
-    values.update(os.environ)
-    return {k: v for k, v in values.items() if _PROVIDER_VAR.match(k) and v}
-
-
-def run_mcp_config(
-    grid: Grid, task: Task, provider: dict[str, str] | None = None
-) -> dict[str, Any]:
-    """The MCP config for one run: the simulated human's env filled in.
-
-    It holds provider keys, so it's only ever posted to the environment, never
-    written to disk or to events.
-    """
-    if grid.human is None:
+    if grid.human is None or human_url is None:
         return grid.mcp_config
     config = copy.deepcopy(grid.mcp_config)
-    server = config["mcpServers"][HUMAN_SERVER]
-    server["env"] = {
-        **(server.get("env") or {}),
-        **(provider_env() if provider is None else provider),
-        "HUMAN_MODEL": grid.human.model,
-        "HUMAN_EXTRA_ARGS": json.dumps(grid.human.extra_args or {}),
-        "HUMAN_PERSONA": grid.personas.get(task.world_id, ""),
-        "HUMAN_TASK_PROMPT": task.prompt,
-        "HUMAN_MAX_QUESTIONS": ""
-        if grid.human.max_questions is None
-        else str(grid.human.max_questions),
-    }
+    config["mcpServers"][HUMAN_SERVER] = {"transport": "http", "url": human_url}
     return config
