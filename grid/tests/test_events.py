@@ -148,3 +148,105 @@ def test_tail_reads_until_stop(tmp_path):
 
     asyncio.run(scenario())
     assert seen == ["one", "two", "three"]
+
+
+def _call_and_result(normalizer, name, args, payload, ref="q1"):
+    call = normalizer.normalize(
+        {
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "level": "INFO",
+            "message": f"Calling tool {name}",
+            "extra": {
+                "message_type": "tool_call",
+                "name": name,
+                "ref": ref,
+                "payload": args,
+            },
+        }
+    )
+    result = normalizer.normalize(
+        {
+            "timestamp": "2026-01-01T00:00:01+00:00",
+            "level": "INFO",
+            "message": f"Tool {name} done",
+            "extra": {
+                "message_type": "tool_result",
+                "name": name,
+                "ref": ref,
+                "payload": payload,
+            },
+        }
+    )
+    return call, result
+
+
+def test_ask_human_question_and_answer_are_readable():
+    # The shapes the agent runner logs (from a real run): arguments as a JSON
+    # string, the result as MCP content blocks.
+    question = "Please provide:\n1. The shortlist\n2. Headcount " + "x" * 400
+    answer = "15 people attending. I’ve shared the guest list. " + "y" * 300
+    payload = [
+        {
+            "type": "text",
+            "text": f"{answer}\n\nShared: /from_user/guest_list.csv",
+            "annotations": None,
+            "meta": None,
+        }
+    ]
+    normalizer = AgentEventNormalizer([*SERVERS, "human_server"])
+    call, result = _call_and_result(
+        normalizer,
+        "human_server_ask_human",
+        json.dumps({"question": question}),
+        payload,
+    )
+    assert json.loads(call["args_preview"]) == {"question": question}
+    # Plain text with real newlines, past the usual preview length, so the
+    # Shared: line survives.
+    assert result["text"] == f"{answer}\n\nShared: /from_user/guest_list.csv"
+    # Arguments as a dict (some harnesses log them parsed) work the same.
+    call, _ = _call_and_result(
+        normalizer, "human_server_ask_human", {"question": "Due?"}, payload, "q2"
+    )
+    assert json.loads(call["args_preview"]) == {"question": "Due?"}
+
+
+def test_tool_results_unwrap_mcp_content_blocks():
+    normalizer = AgentEventNormalizer(SERVERS)
+    cases = [
+        ([{"type": "text", "text": "a,b\n1,2"}], "a,b\n1,2"),
+        (json.dumps([{"type": "text", "text": "serialized"}]), "serialized"),
+        (
+            {"content": [{"type": "text", "text": "wrapped"}], "isError": False},
+            "wrapped",
+        ),
+        (
+            [
+                {"type": "text", "text": "Here:"},
+                {"type": "image", "data": "AAAA", "mimeType": "image/png"},
+            ],
+            "Here:\n[image]",
+        ),
+        (
+            [{"type": "resource", "resource": {"uri": "file:///x", "text": "body"}}],
+            "body",
+        ),
+        ([{"type": "resource_link", "uri": "file:///x", "name": "x.csv"}], "[x.csv]"),
+        ([{"type": "audio", "data": "AAAA"}], "[audio]"),
+        # Not content blocks: passed through as before.
+        ("plain text", "plain text"),
+        ({"rows": 3}, '{"rows": 3}'),
+    ]
+    for i, (payload, expected) in enumerate(cases):
+        _, result = _call_and_result(
+            normalizer, "filesystem_server_read", "{}", payload, f"r{i}"
+        )
+        assert result["text"] == expected, payload
+    # Other tools keep the short preview.
+    _, result = _call_and_result(
+        normalizer,
+        "filesystem_server_read",
+        "{}",
+        [{"type": "text", "text": "z" * 900}],
+    )
+    assert len(result["text"]) == 300

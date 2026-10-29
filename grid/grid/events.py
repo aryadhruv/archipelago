@@ -29,6 +29,9 @@ META_TOOLS = {
     "final_answer",
 }
 PATH_KEYS = ("path", "file_path", "filepath", "file", "directory", "dir", "filename")
+# The simulated human: its question and answer are kept whole (up to
+# TEXT_CHARS) so Run Detail can show them, shared-file lines included.
+ASK_HUMAN = ("human_server", "ask_human")
 
 # Every event the API returns has these keys.
 EVENT_FIELDS = (
@@ -80,13 +83,66 @@ def _args(payload: Any) -> dict[str, Any] | None:
     return None
 
 
-def _result_preview(payload: Any) -> str | None:
+def _content_blocks(payload: Any) -> list[dict[str, Any]] | None:
+    """A tool result's MCP content blocks, or None if it isn't in that shape.
+
+    The shape comes from the MCP protocol, not the model: every model's tool
+    results arrive as ``[{"type": "text", "text": ...}, ...]`` (or a
+    CallToolResult with them under ``content``), sometimes serialized.
+    """
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+    if isinstance(payload, dict) and isinstance(payload.get("content"), list):
+        payload = payload["content"]
+    if (
+        isinstance(payload, list)
+        and payload
+        and all(isinstance(b, dict) and isinstance(b.get("type"), str) for b in payload)
+    ):
+        return payload
+    return None
+
+
+def _block_text(block: dict[str, Any]) -> str:
+    kind = block["type"]
+    if kind == "text":
+        return str(block.get("text") or "")
+    if kind == "resource":
+        resource = block.get("resource") or {}
+        if isinstance(resource.get("text"), str):
+            return resource["text"]
+        return f"[resource {resource.get('uri') or ''}]".replace(" ]", "]")
+    if kind == "resource_link":
+        return f"[{block.get('name') or block.get('uri') or 'resource'}]"
+    # image, audio, and any block type added later.
+    return f"[{kind}]"
+
+
+def _result_text(payload: Any) -> str | None:
+    """A tool result as readable text: content blocks unwrapped, else as is."""
     if payload is None:
         return None
+    blocks = _content_blocks(payload)
+    if blocks is not None:
+        return "\n".join(_block_text(b) for b in blocks)
     text = payload if isinstance(payload, str) else json.dumps(payload, default=str)
-    if _IMAGE_PAYLOAD.search(text[:2000]):
-        return "[image]"
-    return _clip(text)
+    return "[image]" if _IMAGE_PAYLOAD.search(text[:2000]) else text
+
+
+def _result_preview(payload: Any, limit: int = PREVIEW_CHARS) -> str | None:
+    return _clip(_result_text(payload), limit)
+
+
+def _args_preview(server: str | None, tool: str, payload: Any) -> str | None:
+    if (server, tool) == ASK_HUMAN:
+        args = _args(payload)
+        if args is not None and isinstance(args.get("question"), str):
+            # Always valid JSON, so the dashboard can read the question.
+            return json.dumps({"question": _clip(args["question"], TEXT_CHARS)})
+    return _clip(payload)
 
 
 def iso(epoch: float | None) -> str | None:
@@ -135,7 +191,7 @@ class AgentEventNormalizer:
                 "server": server,
                 "tool": tool,
                 "ref": ref,
-                "args_preview": _clip(extra.get("payload")),
+                "args_preview": _args_preview(server, tool, extra.get("payload")),
                 "path": path,
                 "ts": ts,
             }
@@ -160,7 +216,11 @@ class AgentEventNormalizer:
                 "ref": ref,
                 "ok": level not in ("ERROR", "WARNING", "CRITICAL"),
                 "duration_ms": round((ts - started) * 1000) if ts and started else None,
-                "text": _result_preview(extra.get("payload")) or _clip(message),
+                "text": _result_preview(
+                    extra.get("payload"),
+                    TEXT_CHARS if (server, tool) == ASK_HUMAN else PREVIEW_CHARS,
+                )
+                or _clip(message),
                 "ts": ts,
             }
         if kind == "llm_usage":
