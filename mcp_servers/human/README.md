@@ -8,6 +8,10 @@ the task. An LLM plays that person (`mcp_servers/human_server/sim.py`):
   never reads them. When asked, it shares one by uploading it to
   `/<HUMAN_UPLOAD_DIR>/` in the agent's filesystem through the environment's
   `/data/populate`, and the reply names the path the agent sees.
+- **How it answers:** through a `reply(answer, share)` tool. Only the paths in
+  `share` are uploaded; the answer's wording never triggers a share. A wrong
+  path gets it another try (3 model calls at most), and a plain-text answer
+  is taken as is, with nothing shared.
 
 It runs outside the agent's sandbox (the grid starts it on the host, see
 `grid/grid/human.py`), so its provider key and its folder never enter it.

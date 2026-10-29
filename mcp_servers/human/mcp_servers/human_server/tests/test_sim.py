@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sim import SHARE_NUDGE, UNAVAILABLE, SimulatedHuman
+from sim import REPLY_TOOL, UNAVAILABLE, SimulatedHuman
 from utils.config import DEFAULT_PERSONA, Config
 
 
@@ -13,8 +13,9 @@ def _response(content=None, tool_calls=None):
     return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=usage)
 
 
-def _share(path, call_id="c1"):
-    function = SimpleNamespace(name="share_file", arguments=json.dumps({"path": path}))
+def _reply(answer, share=None, call_id="c1"):
+    args = {"answer": answer} if share is None else {"answer": answer, "share": share}
+    function = SimpleNamespace(name="reply", arguments=json.dumps(args))
     return SimpleNamespace(id=call_id, function=function)
 
 
@@ -145,54 +146,70 @@ async def test_ask_answers_and_keeps_history(world):
     assert completion.calls[0]["model"] == "test/model"
 
 
+async def test_ask_answers_through_the_reply_tool(world):
+    completion = FakeCompletion(_response(tool_calls=[_reply("Friday.")]))
+    assert await SimulatedHuman(world, completion=completion).ask("Due?") == "Friday."
+    assert completion.calls[0]["tools"] == [REPLY_TOOL]
+
+
 async def test_ask_shares_file_and_reports_path(world):
+    upload = FakeUpload()
     completion = FakeCompletion(
-        _response(tool_calls=[_share("q3/budget.xlsx")]),
-        _response("Sent you the budget."),
+        _response(tool_calls=[_reply("Sent you the budget.", ["q3/budget.xlsx"])])
     )
-    human = SimulatedHuman(world, completion=completion, upload=FakeUpload())
+    human = SimulatedHuman(world, completion=completion, upload=upload)
     answer = await human.ask("Do you have the budget?")
     assert answer == "Sent you the budget.\n\nShared: /from_user/budget.xlsx"
-    tool_message = completion.calls[1]["messages"][-1]
-    assert tool_message == {
-        "role": "tool",
-        "tool_call_id": "c1",
-        "content": "/from_user/budget.xlsx",
-    }
+    assert upload.files == {"budget.xlsx": b"secret-bytes"}
+    assert len(completion.calls) == 1
 
 
-async def test_last_round_has_no_tools(world):
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "I've shared budget.xlsx with you.",
+        "I can't send budget.xlsx, use your judgment.",
+        "budget.xlsx is sharper than you think.",
+    ],
+)
+async def test_wording_never_shares_or_retries(world, answer):
+    # Only the share list sends files, whatever the answer says.
+    upload = FakeUpload()
+    for response in (_response(answer), _response(tool_calls=[_reply(answer)])):
+        completion = FakeCompletion(response)
+        human = SimulatedHuman(world, completion=completion, upload=upload)
+        assert await human.ask("Budget?") == answer
+        assert len(completion.calls) == 1
+    assert upload.files == {}
+
+
+async def test_wrong_path_is_retried_and_good_shares_kept(world):
+    upload = FakeUpload()
     completion = FakeCompletion(
-        _response(tool_calls=[_share("nope", "a")]),
-        _response(tool_calls=[_share("nope", "b")]),
-        _response(tool_calls=[_share("nope", "c")]),
-        _response("I don't have that."),
+        _response(tool_calls=[_reply("Both attached.", ["q3/budget.xlsx", "nope"])]),
+        _response(tool_calls=[_reply("Here's the Q4 one too.", ["q4/budget.xlsx"])]),
+    )
+    human = SimulatedHuman(world, completion=completion, upload=upload)
+    answer = await human.ask("Budgets?")
+    assert answer == (
+        "Here's the Q4 one too.\n\n"
+        "Shared: /from_user/budget.xlsx\nShared: /from_user/budget-2.xlsx"
+    )
+    tool_message = completion.calls[1]["messages"][-1]
+    assert tool_message["role"] == "tool"
+    assert tool_message["tool_call_id"] == "c1"
+    assert "'nope'" in tool_message["content"]
+    assert "/from_user/budget.xlsx" in tool_message["content"]
+
+
+async def test_every_round_keeps_tools(world):
+    completion = FakeCompletion(
+        *[_response(tool_calls=[_reply("Here.", ["nope"], str(i))]) for i in range(3)]
     )
     answer = await SimulatedHuman(world, completion=completion).ask("File?")
-    assert answer == "I don't have that."
-    assert all("tools" in call for call in completion.calls[:3])
-    assert "tools" not in completion.calls[3]
-
-
-async def test_claimed_share_without_tool_call_is_nudged(world):
-    completion = FakeCompletion(
-        _response("I've shared budget.xlsx with you."),
-        _response(tool_calls=[_share("q3/budget.xlsx")]),
-        _response("Sent."),
-    )
-    human = SimulatedHuman(world, completion=completion, upload=FakeUpload())
-    answer = await human.ask("Budget?")
-    assert answer == "Sent.\n\nShared: /from_user/budget.xlsx"
-    assert {"role": "user", "content": SHARE_NUDGE} in completion.calls[1]["messages"]
-
-
-async def test_mentioning_a_file_without_claiming_to_send_it_is_fine(world):
-    completion = FakeCompletion(
-        _response("It's all in budget.xlsx, ask if you need it.")
-    )
-    human = SimulatedHuman(world, completion=completion)
-    assert await human.ask("Where?") == "It's all in budget.xlsx, ask if you need it."
-    assert len(completion.calls) == 1
+    assert answer == "Here."
+    assert len(completion.calls) == 3
+    assert all(call["tools"] == [REPLY_TOOL] for call in completion.calls)
 
 
 async def test_question_cap(world):

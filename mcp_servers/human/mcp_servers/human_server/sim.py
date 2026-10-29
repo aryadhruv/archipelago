@@ -12,7 +12,6 @@ enter it: shared files go in through the environment's /data/populate.
 import asyncio
 import io
 import json
-import re
 import tarfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -23,39 +22,38 @@ import litellm
 from loguru import logger
 from utils.config import Config
 
-# Model calls per question: rounds that may share files, then a final answer.
-MAX_ROUNDS = 4
+# Model calls per question: a reply, plus retries when it names files it
+# doesn't have.
+MAX_ROUNDS = 3
 MAX_KNOWLEDGE_CHARS = 50_000
 MAX_LISTED_FILES = 300
 
 UNAVAILABLE = "The user isn't available right now. Use your best judgment."
 
-# A reply that says a file was sent, to catch a model that claims to share
-# without calling share_file.
-_CLAIMS_SHARE = re.compile(r"\b(shar|sent|send|upload|attach)", re.IGNORECASE)
-SHARE_NUDGE = (
-    "You said you'd share a file, but you didn't call share_file, so the "
-    "assistant has nothing. Call share_file now, or answer without claiming "
-    "to have sent it."
-)
-
-SHARE_FILE_TOOL = {
+# The human answers through this tool, so a file is shared only when it's
+# named in the call, never inferred from the wording of the answer.
+REPLY_TOOL = {
     "type": "function",
     "function": {
-        "name": "share_file",
-        "description": (
-            "Upload one of your files to the assistant. Use it when the "
-            "assistant needs a file only you have."
-        ),
+        "name": "reply",
+        "description": "Answer the assistant, optionally uploading some of your files.",
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {
+                "answer": {
                     "type": "string",
-                    "description": "The file's path as listed under 'Files you have'.",
-                }
+                    "description": "What you say to the assistant.",
+                },
+                "share": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Files to upload, by their path under 'Files you have'. "
+                        "Leave empty unless you're sending something."
+                    ),
+                },
             },
-            "required": ["path"],
+            "required": ["answer"],
         },
     },
 }
@@ -77,9 +75,8 @@ person, in your own voice.
 # Files you have
 These are on your own computer; the assistant can't see them. You know roughly \
 what each one is from its name, but you don't have them open, so never quote \
-or summarize their contents. If the assistant needs one, upload it with the \
-share_file tool. Saying you've sent a file doesn't send it: only share_file \
-does, so call it before you tell them it's on its way.
+or summarize their contents. To send one, list it in the reply tool's `share`; \
+that's the only way a file reaches the assistant.
 {own_files}
 
 # Files the assistant can see
@@ -92,6 +89,7 @@ let the assistant use its judgment. Never make up facts or figures.
 - Answer the question asked. Don't do the task for the assistant and don't \
 volunteer the full solution.
 - Be brief, as your persona would be. No preamble.
+- Always answer with the reply tool.
 """
 
 
@@ -229,12 +227,11 @@ class SimulatedHuman:
             shared: list[str] = []
             reply = ""
             for round_ in range(MAX_ROUNDS):
-                tools = {"tools": [SHARE_FILE_TOOL]} if round_ < MAX_ROUNDS - 1 else {}
                 # extra_args may raise num_retries, e.g. for a rate-limited free model.
                 response = await self._completion(
                     model=self.config.model,
                     messages=messages,
-                    **tools,
+                    tools=[REPLY_TOOL],
                     **{"num_retries": 3, **self.config.extra_args},
                 )
                 message = response.choices[0].message
@@ -245,19 +242,21 @@ class SimulatedHuman:
                         f"completion={usage.completion_tokens}"
                     )
                 tool_calls = getattr(message, "tool_calls", None) or []
+                # A model that answers in plain text shares nothing.
+                reply = (message.content or "").strip()
                 if not tool_calls:
-                    reply = (message.content or "").strip()
-                    if (
-                        not shared
-                        and round_ < MAX_ROUNDS - 2
-                        and self._claims_share(reply)
-                    ):
-                        messages += [
-                            {"role": "assistant", "content": reply},
-                            {"role": "user", "content": SHARE_NUDGE},
-                        ]
-                        continue
                     break
+                answers, results = [], []
+                for call in tool_calls:
+                    answer, result = await self._reply(
+                        call.function.name, call.function.arguments, shared
+                    )
+                    answers.append(answer)
+                    results.append(result)
+                reply = "\n\n".join(a for a in answers if a) or reply
+                if all(r is None for r in results) or round_ == MAX_ROUNDS - 1:
+                    break
+                # Some files weren't shared: say why and let it reply again.
                 messages.append(
                     {
                         "role": "assistant",
@@ -275,14 +274,13 @@ class SimulatedHuman:
                         ],
                     }
                 )
-                for call in tool_calls:
-                    result = await self._run_tool(
-                        call.function.name, call.function.arguments
-                    )
-                    if not result.startswith("Error") and result not in shared:
-                        shared.append(result)
+                for call, result in zip(tool_calls, results, strict=True):
                     messages.append(
-                        {"role": "tool", "tool_call_id": call.id, "content": result}
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "content": result or "Delivered.",
+                        }
                     )
 
             # The agent always learns where shared files landed, whatever the
@@ -301,21 +299,34 @@ class SimulatedHuman:
             ]
             return answer
 
-    def _claims_share(self, reply: str) -> bool:
-        root = self.config.files_root
-        names = (
-            [p.name for p in root.rglob("*") if p.is_file()] if root.is_dir() else []
-        )
-        lowered = reply.lower()
-        return bool(_CLAIMS_SHARE.search(reply)) and any(
-            name.lower() in lowered for name in names
-        )
+    async def _reply(
+        self, name: str, arguments: str, shared: list[str]
+    ) -> tuple[str, str | None]:
+        """Run one reply call: its answer, and why it failed, or None.
 
-    async def _run_tool(self, name: str, arguments: str) -> str:
-        if name != "share_file":
-            return f"Error: unknown tool {name!r}."
+        Shared paths are added to ``shared``.
+        """
+        if name != "reply":
+            return "", f"Error: unknown tool {name!r}. Answer with reply."
         try:
-            path = json.loads(arguments or "{}").get("path", "")
-        except json.JSONDecodeError:
-            return "Error: arguments must be JSON with a 'path'."
-        return await self.share_file(str(path))
+            args = json.loads(arguments or "{}")
+            answer = str(args.get("answer") or "").strip()
+            paths = args.get("share") or []
+        except (json.JSONDecodeError, AttributeError):
+            return "", "Error: arguments must be JSON with an 'answer'."
+        if isinstance(paths, str):
+            paths = [paths]
+        errors = []
+        for path in paths:
+            result = await self.share_file(str(path))
+            if result.startswith("Error"):
+                errors.append(result)
+            elif result not in shared:
+                shared.append(result)
+        if not errors:
+            return answer, None
+        return answer, (
+            "\n".join(errors) + "\nYour answer hasn't reached the assistant yet. "
+            "Reply again, with corrected paths or none. Already shared: "
+            + (", ".join(shared) or "nothing")
+        )

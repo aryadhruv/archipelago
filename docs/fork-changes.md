@@ -71,7 +71,8 @@ what we removed.
   who assigned the task. An LLM plays that person, from the task prompt, a
   persona in `world_descriptions.json`, and `.apps_data/human/knowledge.md`.
   It shares files from `.apps_data/human/files/` by uploading them to
-  `/from_user/` rather than reading them. It runs on the host, one server per
+  `/from_user/` rather than reading them; it answers through a
+  `reply(answer, share)` tool, so only the files it lists are sent. It runs on the host, one server per
   agent attempt, which the sandbox's gateway reaches over HTTP at
   `host.docker.internal`; its provider key (from `agents/.env`) and its folder
   never enter the container. Grid containers map `host.docker.internal` to
