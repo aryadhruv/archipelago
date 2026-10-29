@@ -76,7 +76,9 @@ Starting a grid also removes containers left by earlier grids. A stopped grid
 resumes where it left off.
 
 - **Start on launch:** add `--start`.
-- **Second dashboard:** add `--port 7071`.
+- **Second dashboard:** add `--port 7071`. Each example grid has its own
+  `port_base` (text 8100, human-in-the-loop 8200, images 8300), so they can
+  run at the same time.
 - **Results:** under `examples/<example>/runs/<grid_id>/`.
 - **First start:** builds the environment image, which takes about 10 minutes.
 

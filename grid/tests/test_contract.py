@@ -48,15 +48,25 @@ def test_fixture_dir_exists():
     assert (MOCK / "grid.json").exists()
 
 
+def _without_human(value):
+    """The fixture as a grid without a human serves it: no human_server keys."""
+    if isinstance(value, dict):
+        return {k: _without_human(v) for k, v in value.items() if k != "human_server"}
+    if isinstance(value, list):
+        return [_without_human(v) for v in value]
+    return value
+
+
 def test_grid_summary_runs_leaderboard(setup):
-    _, _, client = setup
+    grid, _, client = setup
     for name, url in [
         ("grid.json", "/api/grid"),
         ("summary.json", "/api/summary"),
         ("runs.json", "/api/runs"),
         ("leaderboard.json", "/api/leaderboard"),
     ]:
-        assert _missing(_fixture(name), client.get(url).json()) == [], name
+        expected = _fixture(name) if grid.human else _without_human(_fixture(name))
+        assert _missing(expected, client.get(url).json()) == [], name
 
 
 def test_run_detail_and_events(setup):
