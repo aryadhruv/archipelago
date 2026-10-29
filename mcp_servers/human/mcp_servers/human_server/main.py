@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
 from tools.ask_human import ask_human
+from utils.config import load_config
 
 mcp = FastMCP(
     "human-server",
@@ -46,6 +47,8 @@ if __name__ == "__main__":
     # variables already set win.
     if env_file := os.getenv("HUMAN_ENV_FILE"):
         load_dotenv(env_file, override=False)
+    # Fail now, with the reason in the log, rather than on every question.
+    load_config()
     if parent := os.getenv("HUMAN_PARENT_PID"):
         _exit_with_parent(int(parent))
     transport = os.getenv("MCP_TRANSPORT", "http").lower()

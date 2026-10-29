@@ -72,7 +72,7 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `pass_score` | 1.0 | The score a run needs to count as a pass on the leaderboard |
 | `agent_grace_sec` | 600 | Seconds past the agent's own wall clock before the grid kills it (scored as a timeout) |
 | `grading_timeout_sec` | 3600 | Seconds before the grid kills a grading attempt and reruns grading |
-| `human` | off | `{"model": ..., "extra_args": ..., "max_questions": null}`: a simulated human the models can ask (below) |
+| `human` | off | `{"model": ..., "extra_args": ..., "max_questions": null}`: a simulated human the models can ask (below). `max_questions` is a whole number or null; `extra_args` can't set `model`, `messages` or `tools` |
 
 Each rubric criterion becomes one `output_llm` verifier. The first one is the
 primary objective.

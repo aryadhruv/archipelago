@@ -30,10 +30,10 @@ It runs outside the agent's sandbox (the grid starts it on the host, see
 |---|---|---|
 | `HUMAN_MODEL` | required | LiteLLM model string |
 | `HUMAN_ENV_FILE` | | A .env with its provider key, read with dotenv; variables already set win |
-| `HUMAN_EXTRA_ARGS` | `{}` | JSON, passed to `litellm.acompletion` |
+| `HUMAN_EXTRA_ARGS` | `{}` | A JSON object passed to `litellm.acompletion`; it can't set `model`, `messages` or `tools` |
 | `HUMAN_PERSONA` | accommodating, 1–3 sentences | |
 | `HUMAN_TASK_PROMPT` | | The prompt the agent was given |
-| `HUMAN_MAX_QUESTIONS` | no cap | Past it, the human is unavailable |
+| `HUMAN_MAX_QUESTIONS` | no cap | A whole number ≥ 0; past it, the human is unavailable |
 | `HUMAN_DATA_ROOT` | `human` | The human's folder |
 | `HUMAN_AGENT_FILES` | | A file listing the agent's paths, one per line |
 | `HUMAN_ENV_URL` | `http://localhost:8080` | The agent's environment, for uploads |
@@ -43,6 +43,11 @@ It runs outside the agent's sandbox (the grid starts it on the host, see
 
 The grid fills these in per run from `grid.json`'s `human` and
 `world_descriptions.json` (see `grid/README.md`).
+
+The settings are checked at startup. If one is invalid (no model, bad JSON,
+a reserved key in `HUMAN_EXTRA_ARGS`, a cap that isn't a whole number), the
+server exits with the reason in its log instead of failing every question.
+The grid checks the same when it loads `grid.json`.
 
 ```bash
 uv sync --locked && uv run pytest

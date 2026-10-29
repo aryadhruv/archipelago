@@ -211,8 +211,6 @@ class SimulatedHuman:
         return f"/{self.config.upload_dir}/{name}"
 
     async def ask(self, question: str) -> str:
-        if not self.config.model:
-            raise ValueError("HUMAN_MODEL is not set")
         async with self._lock:
             if (
                 self.config.max_questions is not None

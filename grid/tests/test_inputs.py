@@ -168,6 +168,34 @@ def test_human_needs_a_model(grid_dir):
         _with_human(grid_dir, {"max_questions": 3})
 
 
+@pytest.mark.parametrize(
+    "human, match",
+    [
+        ({"model": 3}, "model string"),
+        ({"model": "  "}, "model string"),
+        ({"model": "m", "extra_args": "fast"}, "must be an object"),
+        ({"model": "m", "extra_args": {"model": "x", "tools": []}}, "model, tools"),
+        ({"model": "m", "max_questions": "abc"}, "whole number"),
+        ({"model": "m", "max_questions": "3"}, "whole number"),
+        ({"model": "m", "max_questions": True}, "whole number"),
+        ({"model": "m", "max_questions": 2.5}, "whole number"),
+        ({"model": "m", "max_questions": -1}, "whole number"),
+    ],
+)
+def test_human_rejects_bad_settings(grid_dir, human, match):
+    with pytest.raises(InputError, match=match):
+        _with_human(grid_dir, human)
+
+
+def test_human_accepts_a_cap_and_extra_args(grid_dir):
+    grid = _with_human(
+        grid_dir,
+        {"model": "m", "extra_args": {"num_retries": 8}, "max_questions": 0},
+    )
+    assert grid.human.extra_args == {"num_retries": 8}
+    assert grid.human.max_questions == 0
+
+
 def test_human_run_config_points_at_the_host(grid_dir):
     grid = _with_human(
         grid_dir,

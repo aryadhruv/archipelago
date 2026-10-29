@@ -175,18 +175,34 @@ def _load_tasks(inputs_dir: Path, selected: Any) -> list[Task]:
     return [by_id[task_id] for task_id in selected]
 
 
+# Arguments the human server passes to litellm itself (its utils/config.py).
+HUMAN_RESERVED_ARGS = ("model", "messages", "tools")
+
+
 def _load_human(raw: Any) -> Human | None:
     if raw is None:
         return None
-    if not isinstance(raw, dict) or not raw.get("model"):
-        raise InputError('"human" needs {"model": ...}')
+    if (
+        not isinstance(raw, dict)
+        or not isinstance(raw.get("model"), str)
+        or not raw["model"].strip()
+    ):
+        raise InputError('"human" needs {"model": "<model string>"}')
+    extra_args = raw.get("extra_args")
+    if extra_args is not None and not isinstance(extra_args, dict):
+        raise InputError('"human.extra_args" must be an object')
+    if reserved := [k for k in HUMAN_RESERVED_ARGS if k in (extra_args or {})]:
+        raise InputError(f'"human.extra_args" can\'t set {", ".join(reserved)}')
     max_questions = raw.get("max_questions")
-    if max_questions is not None and int(max_questions) < 0:
-        raise InputError('"human.max_questions" must be at least 0')
+    # bool is an int in Python, but true isn't a question count.
+    if max_questions is not None and (
+        type(max_questions) is not int or max_questions < 0
+    ):
+        raise InputError('"human.max_questions" must be a whole number, at least 0')
     return Human(
         model=raw["model"],
-        extra_args=raw.get("extra_args") or None,
-        max_questions=None if max_questions is None else int(max_questions),
+        extra_args=extra_args or None,
+        max_questions=max_questions,
     )
 
 
