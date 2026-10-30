@@ -17,7 +17,14 @@ from typing import Any
 from grid.classify import Outcome, Verdict, classify_agent, classify_grading
 from grid.envctl import INFRA_ERRORS, Environment
 from grid.events import AgentEventNormalizer, grading_progress, tail_lines
-from grid.inputs import REPO_DIR, Grid, agent_config_for, verifiers_for
+from grid.human import HumanServer
+from grid.inputs import (
+    REPO_DIR,
+    Grid,
+    agent_config_for,
+    run_mcp_config,
+    verifiers_for,
+)
 from grid.store import Run, Store
 from grid.worlds import tar_gz_to_zip
 
@@ -100,6 +107,8 @@ class Worker:
         self.log = log
         self.world_tars: dict[str, dict[str, Path]] = {}
         self.overlay_tars: dict[str, dict[str, Path]] = {}
+        # task_id -> the simulated human's folder on the host (worlds.human_folder).
+        self.human_folders: dict[str, Path] = {}
 
     def _emit(self, run: Run, kind: str, **data: Any) -> int:
         return self.store.add_event(
@@ -220,6 +229,7 @@ class Worker:
     ) -> Outcome:
         task = self.grid.task(run.task_id)
         env = Environment(port, self.image)
+        human: HumanServer | None = None
         self._state(run, "env_starting", port=port)
         try:
             await env.up()
@@ -238,7 +248,18 @@ class Worker:
             initial.unlink()
 
             self._state(run, "apps_starting")
-            await env.configure_apps(self.grid.mcp_config)
+            human_url = None
+            if self.grid.human is not None:
+                human = HumanServer(
+                    self.grid,
+                    task,
+                    self.human_folders[task.task_id],
+                    env.url,
+                    directory / "human.log",
+                )
+                human_url = await human.start()
+                await env.check_reaches(human_url)
+            await env.configure_apps(run_mcp_config(self.grid, human_url))
 
             self._state(run, "agent_running")
             agent_started = time.time()
@@ -253,6 +274,8 @@ class Worker:
             await env.save_logs(directory / "env.log")
             raise
         finally:
+            if human is not None:
+                await human.stop()
             await env.down()
 
         trajectory = trajectory or {}

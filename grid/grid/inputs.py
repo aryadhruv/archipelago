@@ -3,13 +3,16 @@
 The inputs folder holds the same files as the ``mercor/apex-agents`` dataset:
 
     tasks_and_rubrics.json            [{task_id, task_name, world_id, prompt, rubric, ...}]
-    world_descriptions.json           [{world_id, ...}] (optional)
+    world_descriptions.json           [{world_id, human?: {persona}, ...}] (optional)
     world_files_zipped/<world_id>.zip filesystem/ and optional .apps_data/
+                                      (.apps_data/human/ is the simulated human's;
+                                      it stays on the host, see worlds.py)
     task_files/<task_id>/             optional per-task overlay, same two subsystems
 
 Relative paths in grid.json resolve against the folder grid.json is in.
 """
 
+import copy
 import json
 import re
 from dataclasses import dataclass, field
@@ -18,6 +21,8 @@ from typing import Any
 
 DEFAULTS_DIR = Path(__file__).parent / "defaults"
 REPO_DIR = Path(__file__).resolve().parents[2]
+
+HUMAN_SERVER = "human_server"
 
 # Model ids name run directories and run ids, so keep them path-safe.
 _ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -47,6 +52,16 @@ class Task:
     has_task_files: bool
 
 
+@dataclass(frozen=True)
+class Human:
+    """The simulated human every model in the grid can ask (``ask_human``)."""
+
+    model: str
+    extra_args: dict[str, Any] | None = None
+    # Questions per run; past it the human is unavailable. None is no cap.
+    max_questions: int | None = None
+
+
 @dataclass
 class Grid:
     grid_id: str
@@ -72,6 +87,9 @@ class Grid:
     grading_timeout_sec: int = 3600
     # The score a run needs to count as a pass on the leaderboard.
     pass_score: float = 1.0
+    human: Human | None = None
+    # world_id -> the simulated human's persona, from world_descriptions.json.
+    personas: dict[str, str] = field(default_factory=dict)
     world_ids: list[str] = field(default_factory=list)
 
     @property
@@ -157,6 +175,48 @@ def _load_tasks(inputs_dir: Path, selected: Any) -> list[Task]:
     return [by_id[task_id] for task_id in selected]
 
 
+# Arguments the human server passes to litellm itself (its utils/config.py).
+HUMAN_RESERVED_ARGS = ("model", "messages", "tools")
+
+
+def _load_human(raw: Any) -> Human | None:
+    if raw is None:
+        return None
+    if (
+        not isinstance(raw, dict)
+        or not isinstance(raw.get("model"), str)
+        or not raw["model"].strip()
+    ):
+        raise InputError('"human" needs {"model": "<model string>"}')
+    extra_args = raw.get("extra_args")
+    if extra_args is not None and not isinstance(extra_args, dict):
+        raise InputError('"human.extra_args" must be an object')
+    if reserved := [k for k in HUMAN_RESERVED_ARGS if k in (extra_args or {})]:
+        raise InputError(f'"human.extra_args" can\'t set {", ".join(reserved)}')
+    max_questions = raw.get("max_questions")
+    # bool is an int in Python, but true isn't a question count.
+    if max_questions is not None and (
+        type(max_questions) is not int or max_questions < 0
+    ):
+        raise InputError('"human.max_questions" must be a whole number, at least 0')
+    return Human(
+        model=raw["model"],
+        extra_args=extra_args or None,
+        max_questions=max_questions,
+    )
+
+
+def _load_personas(inputs_dir: Path) -> dict[str, str]:
+    path = inputs_dir / "world_descriptions.json"
+    if not path.exists():
+        return {}
+    return {
+        w["world_id"]: persona
+        for w in _read_json(path)
+        if (persona := ((w.get("human") or {}).get("persona") or "").strip())
+    }
+
+
 def load_grid(config_path: Path) -> Grid:
     config_path = config_path.resolve()
     base = config_path.parent
@@ -214,6 +274,17 @@ def load_grid(config_path: Path) -> Grid:
         pass_score=float(cfg.get("pass_score", 1.0)),
     )
     grid.world_ids = sorted({t.world_id for t in tasks})
+    grid.human = _load_human(cfg.get("human"))
+    if grid.human is not None:
+        grid.personas = _load_personas(inputs_dir)
+        # A placeholder until each run's URL (see run_mcp_config), so every
+        # list of the grid's servers includes it.
+        servers = grid.mcp_config.setdefault("mcpServers", {})
+        servers[HUMAN_SERVER] = _read_json(DEFAULTS_DIR / "human_server.json")
+        # The toolbelt hides tools until the model lists them, and models
+        # otherwise ask in chat, which ends the run. Every model gets this.
+        human_prompt = (DEFAULTS_DIR / "human_prompt.md").read_text().strip()
+        grid.system_prompt = f"{grid.system_prompt}\n\n{human_prompt}"
     if not _ID_PATTERN.match(grid.grid_id):
         raise InputError(f"grid_id {grid.grid_id!r} must match {_ID_PATTERN.pattern}")
     if grid.repeats < 1 or grid.max_parallel < 1 or grid.max_attempts < 1:
@@ -247,3 +318,15 @@ def verifiers_for(task: Task) -> list[dict[str, Any]]:
         }
         for i, c in enumerate(task.rubric)
     ]
+
+
+def run_mcp_config(grid: Grid, human_url: str | None = None) -> dict[str, Any]:
+    """The MCP config for one run: human_server pointed at this run's simulated human.
+
+    The human runs on the host (see human.py), so the config holds no keys.
+    """
+    if grid.human is None or human_url is None:
+        return grid.mcp_config
+    config = copy.deepcopy(grid.mcp_config)
+    config["mcpServers"][HUMAN_SERVER] = {"transport": "http", "url": human_url}
+    return config

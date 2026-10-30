@@ -6,7 +6,7 @@
 import * as api from '../api.js';
 import { store, on, taskById, worldById } from '../store.js';
 import {
-  h, s, icon, clear, ICONS, SERVERS, modelColor, modelInk, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
+  h, s, icon, clear, ICONS, gridServers, modelColor, modelInk, modelLabel, serverLabel, shortTool, showTip, moveTip, hideTip,
   tipBody, pathFromArgs, reducedMotion, fmtInt, fmtClock, stateLabel, stateGroup, modelFill, modelAlt,
 } from '../util.js';
 
@@ -30,10 +30,18 @@ export function render(root, route) {
 
   // ---------- layout ----------
   const models = g.models;
+  // The simulated human (kind 'human') heads the server arc. Its hub is 6px
+  // larger in radius, so the step after it is a little longer, which keeps the
+  // gaps between hub edges even. Every hub stays on the same curve.
+  const SERVERS = [...gridServers(g)].sort((a, b) => (b.kind === 'human') - (a.kind === 'human'));
+  const gaps = SERVERS.slice(1).map((_, i) => (SERVERS[i].kind === 'human' ? 1.15 : 1));
+  const span = gaps.reduce((a, b) => a + b, 0) || 1;
+  let along = 0;
   const agentPos = new Map(models.map((m, i) => [m.id, { x: AX, y: 120 + (i * (H - 200)) / Math.max(1, models.length - 1) }]));
   const serverPos = new Map(SERVERS.map((sv, i) => {
-    const t = i / (SERVERS.length - 1);
-    return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: 64 + t * (H - 118) }];
+    if (i > 0) along += gaps[i - 1];
+    const t = along / span;
+    return [sv.id, { x: SX - Math.sin(t * Math.PI) * 46, y: 76 + t * (H - 130) }];
   }));
 
   const svg = s('svg', { class: 'map', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Live map of tool calls from model agents to MCP servers' });
@@ -57,7 +65,7 @@ export function render(root, route) {
     const a = agentPos.get(m.id);
     for (const sv of SERVERS) {
       const b = serverPos.get(sv.id);
-      const x1 = a.x + 32, x2 = b.x - 26;
+      const x1 = a.x + 32, x2 = b.x - (sv.kind === 'human' ? 32 : 26);
       const d = `M${x1},${a.y} C${x1 + 260},${a.y} ${x2 - 260},${b.y} ${x2},${b.y}`;
       const path = s('path', { class: 'edge', d });
       const hit = s('path', { class: 'edge-hit', d });
@@ -75,14 +83,15 @@ export function render(root, route) {
   const hubs = new Map();
   for (const sv of SERVERS) {
     const p = serverPos.get(sv.id);
-    const grp = s('g', { transform: `translate(${p.x},${p.y})`, style: 'cursor:help' });
-    const ping = s('circle', { class: 'hub-ring', r: 24 });
-    const busy = s('circle', { class: 'busy-ring', r: 27, stroke: 'var(--text-2)', 'stroke-opacity': 0 });
-    const bg = s('circle', { class: 'hub-bg', r: 22 });
-    const ic = s('g', { class: 'hub-icon', transform: 'translate(-11,-11) scale(0.92)' });
+    const big = sv.kind === 'human';
+    const grp = s('g', { class: 'hub' + (sv.kind ? ' ' + sv.kind : ''), transform: `translate(${p.x},${p.y})`, style: 'cursor:help' });
+    const ping = s('circle', { class: 'hub-ring', r: big ? 30 : 24 });
+    const busy = s('circle', { class: 'busy-ring', r: big ? 33 : 27, stroke: 'var(--text-2)', 'stroke-opacity': 0 });
+    const bg = s('circle', { class: 'hub-bg', r: big ? 28 : 22 });
+    const ic = s('g', { class: 'hub-icon', transform: big ? 'translate(-14,-14) scale(1.17)' : 'translate(-11,-11) scale(0.92)' });
     for (const d of ICONS[sv.icon]) ic.append(s('path', { d }));
-    const label = s('text', { class: 'node-label', x: 36, y: -2 }, sv.label);
-    const sub = s('text', { class: 'node-sub', x: 36, y: 14 }, '0 calls/min');
+    const label = s('text', { class: 'node-label', x: big ? 42 : 36, y: -2 }, big ? 'Human in the loop' : sv.label);
+    const sub = s('text', { class: 'node-sub', x: big ? 42 : 36, y: 14 }, '0 calls/min');
     grp.append(ping, busy, bg, ic, label, sub);
     gNodes.append(grp);
     const hub = { grp, ping, busy, sub, times: [], total: 0, inflight: 0, tools: new Map(), pingAt: -1e9, errAt: -1e9 };

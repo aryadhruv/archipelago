@@ -8,10 +8,11 @@ from collections.abc import Callable
 from typing import Any
 
 from grid.envctl import ensure_env_file, ensure_image, git_sha, port_is_free, reap
+from grid.human import ensure_venv
 from grid.inputs import Grid
 from grid.store import PENDING_STATES, Run, Store
 from grid.worker import Worker
-from grid.worlds import overlay_tarballs, world_tarballs
+from grid.worlds import human_folder, overlay_tarballs, world_tarballs
 
 Log = Callable[[str], None]
 
@@ -119,7 +120,7 @@ class Scheduler:
         self.log(f"Environment image: {image}")
 
         cache = self.grid.output_dir / ".cache"
-        worker_tars: dict[str, dict] = {"worlds": {}, "overlays": {}}
+        worker_tars: dict[str, dict] = {"worlds": {}, "overlays": {}, "humans": {}}
         for world_id in self.grid.world_ids:
             self.log(f"Packing world {world_id}")
             worker_tars["worlds"][world_id] = await asyncio.to_thread(
@@ -130,6 +131,16 @@ class Scheduler:
             if task_dir.is_dir():
                 worker_tars["overlays"][task.task_id] = await asyncio.to_thread(
                     overlay_tarballs, task_dir, cache
+                )
+        if self.grid.human is not None:
+            self.log("Installing the simulated human")
+            await ensure_venv()
+            for task in self.grid.tasks:
+                worker_tars["humans"][task.task_id] = await asyncio.to_thread(
+                    human_folder,
+                    self.grid.world_zip(task.world_id),
+                    self.grid.task_files_dir(task.task_id),
+                    cache,
                 )
 
         added = self.store.add_runs(grid_order(self.grid))
@@ -145,6 +156,7 @@ class Scheduler:
             "models": [{"id": m.id, "model": m.model} for m in self.grid.models],
             "repeats": self.grid.repeats,
             "judge": self.grid.grading_settings["llm_judge_model"],
+            "human": self.grid.human.model if self.grid.human else None,
         }
         previous = self.store.get_meta("manifest")
         if previous and previous.get("image") != image:
@@ -166,6 +178,7 @@ class Scheduler:
         worker = Worker(self.grid, self.store, prepared["image"], self.log)
         worker.world_tars = prepared["worlds"]
         worker.overlay_tars = prepared["overlays"]
+        worker.human_folders = prepared["humans"]
 
         pending = len(self.store.runs(PENDING_STATES))
         count = max(1, min(self.grid.max_parallel, pending))

@@ -1,0 +1,35 @@
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["mcp_servers/human_server/tests"]
+pythonpath = ["mcp_servers/human_server"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[project]
+name = "archipelago-human"
+version = "0.1.0"
+description = "Simulated human the agent can ask questions"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastmcp>=3.3.1,<3.4",
+    "litellm==1.83.10",
+    "loguru>=0.7.3",
+    "python-dotenv>=1.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.uv]
+# litellm 1.83.4+ pins python-dotenv==1.0.1 while fastmcp requires >=1.1.0;
+# override to break the conflict (runtime works fine with python-dotenv 1.1.x).
+override-dependencies = ["python-dotenv>=1.0.1"]

@@ -1,0 +1,4 @@
+{
+  "transport": "http",
+  "url": "http://host.docker.internal/human/mcp"
+}

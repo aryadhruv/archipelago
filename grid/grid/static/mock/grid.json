@@ -7,6 +7,7 @@
   "max_parallel": 6,
   "max_attempts": 3,
   "judge_model": "openrouter/vendor-g/judge-model",
+  "human_model": "openrouter/vendor-h/human-model",
   "worlds": [
     {
       "world_id": "world_project_drive",
@@ -77,7 +78,8 @@
       ],
       "mcp_servers": [
         "filesystem_server",
-        "docs_server"
+        "docs_server",
+        "human_server"
       ]
     },
     {
@@ -175,7 +177,8 @@
       "mcp_servers": [
         "chat_server",
         "docs_server",
-        "calendar_server"
+        "calendar_server",
+        "human_server"
       ]
     },
     {

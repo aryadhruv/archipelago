@@ -47,7 +47,7 @@
     "ok": null,
     "duration_ms": null,
     "tokens": null,
-    "text": "Starting 5 MCP servers",
+    "text": "Starting 6 MCP servers",
     "state": "apps_starting"
   },
   {
@@ -290,6 +290,74 @@
   },
   {
     "seq": 18,
+    "ts": "2026-10-25T09:00:43Z",
+    "run_id": "r-0001",
+    "model_id": "model_a",
+    "task_id": "organize_project_folder",
+    "kind": "tool_call",
+    "server": "human_server",
+    "tool": "human_server_ask_human",
+    "ref": "call_h1",
+    "args_preview": "{\"question\": \"/inbox_drop has report_v2.docx and report_final.docx with the same title. Which one should I keep?\"}",
+    "ok": null,
+    "duration_ms": null,
+    "tokens": null,
+    "text": null,
+    "state": null
+  },
+  {
+    "seq": 19,
+    "ts": "2026-10-25T09:00:44Z",
+    "run_id": "r-0001",
+    "model_id": "model_a",
+    "task_id": "organize_project_folder",
+    "kind": "tool_result",
+    "server": "human_server",
+    "tool": "human_server_ask_human",
+    "ref": "call_h1",
+    "args_preview": null,
+    "ok": true,
+    "duration_ms": 1840,
+    "tokens": null,
+    "text": "Keep report_final.docx; v2 is an old draft.",
+    "state": null
+  },
+  {
+    "seq": 20,
+    "ts": "2026-10-25T09:00:44Z",
+    "run_id": "r-0001",
+    "model_id": "model_a",
+    "task_id": "organize_project_folder",
+    "kind": "tool_call",
+    "server": "human_server",
+    "tool": "human_server_ask_human",
+    "ref": "call_h2",
+    "args_preview": "{\"question\": \"Is there a naming convention the project folders should follow?\"}",
+    "ok": null,
+    "duration_ms": null,
+    "tokens": null,
+    "text": null,
+    "state": null
+  },
+  {
+    "seq": 21,
+    "ts": "2026-10-25T09:00:45Z",
+    "run_id": "r-0001",
+    "model_id": "model_a",
+    "task_id": "organize_project_folder",
+    "kind": "tool_result",
+    "server": "human_server",
+    "tool": "human_server_ask_human",
+    "ref": "call_h2",
+    "args_preview": null,
+    "ok": true,
+    "duration_ms": 2210,
+    "tokens": null,
+    "text": "Lowercase with underscores. Our style notes are attached.\n\nShared: /from_user/naming_conventions.md",
+    "state": null
+  },
+  {
+    "seq": 22,
     "ts": "2026-10-25T09:00:46Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -306,7 +374,7 @@
     "state": null
   },
   {
-    "seq": 19,
+    "seq": 23,
     "ts": "2026-10-25T09:00:49Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -323,7 +391,7 @@
     "state": null
   },
   {
-    "seq": 20,
+    "seq": 24,
     "ts": "2026-10-25T09:00:49Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -340,7 +408,7 @@
     "state": null
   },
   {
-    "seq": 21,
+    "seq": 25,
     "ts": "2026-10-25T09:00:51Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -357,7 +425,7 @@
     "state": null
   },
   {
-    "seq": 22,
+    "seq": 26,
     "ts": "2026-10-25T09:00:51Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -374,7 +442,7 @@
     "state": null
   },
   {
-    "seq": 23,
+    "seq": 27,
     "ts": "2026-10-25T09:00:54Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -391,7 +459,7 @@
     "state": null
   },
   {
-    "seq": 24,
+    "seq": 28,
     "ts": "2026-10-25T09:00:54Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -408,7 +476,7 @@
     "state": null
   },
   {
-    "seq": 25,
+    "seq": 29,
     "ts": "2026-10-25T09:00:54Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -425,7 +493,7 @@
     "state": null
   },
   {
-    "seq": 26,
+    "seq": 30,
     "ts": "2026-10-25T09:01:00Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -442,7 +510,7 @@
     "state": null
   },
   {
-    "seq": 27,
+    "seq": 31,
     "ts": "2026-10-25T09:01:02Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -459,7 +527,7 @@
     "state": null
   },
   {
-    "seq": 28,
+    "seq": 32,
     "ts": "2026-10-25T09:01:02Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -476,7 +544,7 @@
     "state": null
   },
   {
-    "seq": 29,
+    "seq": 33,
     "ts": "2026-10-25T09:01:02Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -493,7 +561,7 @@
     "state": null
   },
   {
-    "seq": 30,
+    "seq": 34,
     "ts": "2026-10-25T09:01:02Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -510,7 +578,7 @@
     "state": null
   },
   {
-    "seq": 31,
+    "seq": 35,
     "ts": "2026-10-25T09:01:03Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -527,7 +595,7 @@
     "state": null
   },
   {
-    "seq": 32,
+    "seq": 36,
     "ts": "2026-10-25T09:01:04Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -544,7 +612,7 @@
     "state": "snapshotting"
   },
   {
-    "seq": 33,
+    "seq": 37,
     "ts": "2026-10-25T09:01:10Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -561,7 +629,7 @@
     "state": "grading"
   },
   {
-    "seq": 34,
+    "seq": 38,
     "ts": "2026-10-25T09:01:13Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -578,7 +646,7 @@
     "state": null
   },
   {
-    "seq": 35,
+    "seq": 39,
     "ts": "2026-10-25T09:01:16Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -595,7 +663,7 @@
     "state": null
   },
   {
-    "seq": 36,
+    "seq": 40,
     "ts": "2026-10-25T09:01:21Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -612,7 +680,7 @@
     "state": null
   },
   {
-    "seq": 37,
+    "seq": 41,
     "ts": "2026-10-25T09:01:27Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -629,7 +697,7 @@
     "state": null
   },
   {
-    "seq": 38,
+    "seq": 42,
     "ts": "2026-10-25T09:01:29Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -646,7 +714,7 @@
     "state": null
   },
   {
-    "seq": 39,
+    "seq": 43,
     "ts": "2026-10-25T09:01:33Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -663,7 +731,7 @@
     "state": null
   },
   {
-    "seq": 40,
+    "seq": 44,
     "ts": "2026-10-25T09:01:34Z",
     "run_id": "r-0001",
     "model_id": "model_a",
@@ -680,7 +748,7 @@
     "state": null
   },
   {
-    "seq": 41,
+    "seq": 45,
     "ts": "2026-10-25T09:01:34Z",
     "run_id": "r-0001",
     "model_id": "model_a",

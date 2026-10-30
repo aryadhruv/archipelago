@@ -3,5 +3,10 @@
     "world_id": "animals",
     "world_name": "Animal images",
     "description": "Subfolders with one animal image each."
+  },
+  {
+    "world_id": "animal_notes",
+    "world_name": "Animal notes",
+    "description": "Subfolders with one text note about an animal each."
   }
 ]

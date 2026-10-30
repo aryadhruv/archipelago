@@ -15,8 +15,10 @@ def _write(path, value):
     path.write_text(json.dumps(value))
 
 
-@pytest.fixture
-def setup(tmp_path):
+# Every API and contract test runs with a simulated human (what the demo
+# fixtures show) and without one (the default).
+@pytest.fixture(params=[True, False], ids=["human", "no_human"])
+def setup(tmp_path, request):
     _write(
         tmp_path / "tasks_and_rubrics.json",
         [
@@ -47,10 +49,10 @@ def setup(tmp_path):
             },
         ],
     )
-    _write(
-        tmp_path / "grid.json",
-        {"grid_id": "g", "repeats": 2, "judge": {"model": "j/j"}},
-    )
+    config = {"grid_id": "g", "repeats": 2, "judge": {"model": "j/j"}}
+    if request.param:
+        config["human"] = {"model": "h/h"}
+    _write(tmp_path / "grid.json", config)
     world = tmp_path / "world_files_zipped" / "w1.zip"
     world.parent.mkdir()
     with zipfile.ZipFile(world, "w") as zf:

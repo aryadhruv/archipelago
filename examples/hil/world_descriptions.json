@@ -1,0 +1,10 @@
+[
+  {
+    "world_id": "offsite",
+    "world_name": "Team offsite",
+    "description": "A venue shortlist for a one-day team offsite. The organizer knows the headcount and constraints and holds the guest list.",
+    "human": {
+      "persona": "The team lead organizing the offsite. Friendly but busy: replies in a sentence or two, and only answers what was asked."
+    }
+  }
+]

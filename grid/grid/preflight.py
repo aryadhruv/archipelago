@@ -134,6 +134,16 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
                 [grid.grading_settings["llm_judge_model"]],
             )
         )
+        if grid.human is not None:
+            # The grid passes agents/.env's keys to the simulated human.
+            checks.append(
+                await _key_check(
+                    "human_key",
+                    "Provider key for the simulated human (agents/.env)",
+                    AGENTS_DIR,
+                    [grid.human.model],
+                )
+            )
     return checks
 
 

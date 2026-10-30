@@ -2,7 +2,7 @@ from grid.store import run_id_for
 
 
 def test_grid(setup):
-    _, _, client = setup
+    grid, _, client = setup
     body = client.get("/api/grid").json()
     assert body["totals"] == {"tasks": 1, "models": 2, "repeats": 2, "runs": 4}
     assert body["worlds"][0] == {
@@ -14,6 +14,12 @@ def test_grid(setup):
     }
     assert body["tasks"][0]["criteria_count"] == 1
     assert [m["provider"] for m in body["models"]] == ["vendor-a", "vendor-b"]
+    if grid.human:
+        assert body["human_model"] == "h/h"
+        assert "human_server" in body["tasks"][0]["mcp_servers"]
+    else:
+        assert body["human_model"] is None
+        assert "human_server" not in body["tasks"][0]["mcp_servers"]
 
 
 def test_runs_and_summary(setup):

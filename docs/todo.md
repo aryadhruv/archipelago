@@ -24,11 +24,26 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
    Greenhouse, TaxJar), but the repo has no MCP servers for those apps, so
    they can't run as shipped. Either remove them or pair each with a server.
 
+3. **Simulated human follow-ups.**
+   - Count the human's tokens per run (now only logged to the run's
+     `human.log`).
+   - Show questions asked per model on the leaderboard.
+   - A failed human model call tells the agent the human is unavailable, so
+     the agent carries on without an answer. Decide whether to flag those
+     runs as infra.
+   - Give each answer an overall deadline under the agent's tool-call
+     timeout (180 s), and drop the answer if it passes.
+   - Files the human shares are graded as if the agent created them: the
+     diff runs from `initial.zip`, taken before any share. Fine while shared
+     files are inputs the agent doesn't edit. Plan when it matters (grid
+     only, no grader change; details on PR #14): the human server keeps a
+     copy of each share in the attempt dir; grading gets a starting snapshot
+     with the shares added, so only the agent's edits count; each rubric line
+     lists the shares as reference artifacts, which the judge sees as context.
+     Telling the judge a file came from the user would need a grader change.
+
 ### Small fixes
 
-- The committed `examples/simple_task/mcp_config.json` uses plain `python`
-  without `MCP_TRANSPORT=stdio`, so the example fails on a fresh clone with
-  `ModuleNotFoundError: mcp_schema`. Use the server's venv Python and stdio.
 - Optional: bind the environment port to `127.0.0.1` in
   `environment/docker-compose.yml`, so the sandbox isn't reachable from the
   network.
@@ -87,6 +102,14 @@ Apply these in every grid.
 - **Dashboard** (`grid serve`): setup and preflight, Mission Control, the
   Live Map (live, focus with the world's files, replay), run detail,
   leaderboard and infra, on the API's REST endpoints and event stream.
+- **Examples on free models.** Three grid types, each with free OpenRouter
+  models that can do its task: text (`examples/grid/grid_text.json`), images
+  (`grid_images.json`, models that read images) and human-in-the-loop
+  (`examples/hil`). `simple_task` runs the text task.
+  `simple_task`'s `mcp_config.json` now uses the server's venv Python over
+  stdio, so it runs on a fresh clone.
+- **Simulated human** (`mcp_servers/human`, grid `human`): `ask_human`, with a
+  persona per world, a knowledge file, and file sharing into `/from_user/`.
 - **Leaderboard** (`GET /api/leaderboard`): mean score ± CI, pass rate,
   tokens, time, errors, fails and tool use per model, and a task × model
   matrix.

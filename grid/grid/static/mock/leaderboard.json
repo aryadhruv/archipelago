@@ -20,7 +20,8 @@
         "code_execution_server": 6,
         "slides_server": 19,
         "chat_server": 16,
-        "pdf_server": 12
+        "pdf_server": 12,
+        "human_server": 14
       },
       "gave_up": 0
     },
@@ -44,7 +45,8 @@
         "code_execution_server": 4,
         "slides_server": 15,
         "chat_server": 14,
-        "pdf_server": 7
+        "pdf_server": 7,
+        "human_server": 9
       },
       "gave_up": 0
     },
@@ -67,7 +69,8 @@
         "sheets_server": 15,
         "code_execution_server": 6,
         "slides_server": 12,
-        "chat_server": 10
+        "chat_server": 10,
+        "human_server": 11
       },
       "gave_up": 0
     },
@@ -91,7 +94,8 @@
         "code_execution_server": 8,
         "slides_server": 19,
         "pdf_server": 7,
-        "chat_server": 11
+        "chat_server": 11,
+        "human_server": 6
       },
       "gave_up": 0
     },
@@ -115,7 +119,8 @@
         "code_execution_server": 6,
         "slides_server": 11,
         "chat_server": 9,
-        "pdf_server": 5
+        "pdf_server": 5,
+        "human_server": 17
       },
       "gave_up": 0
     },
@@ -139,7 +144,8 @@
         "code_execution_server": 3,
         "slides_server": 9,
         "chat_server": 12,
-        "pdf_server": 6
+        "pdf_server": 6,
+        "human_server": 4
       },
       "gave_up": 0
     }
@@ -435,5 +441,5 @@
     }
   ],
   "pass_score": 1.0,
-  "rules": "Scored runs only. A failed agent or a wall-clock timeout counts against the model; runs that gave up on infra errors are left out of the score. Pass = score \u2265 1.00."
+  "rules": "Scored runs only. A failed agent or a wall-clock timeout counts against the model; runs that gave up on infra errors are left out of the score. Pass = score ≥ 1.00."
 }

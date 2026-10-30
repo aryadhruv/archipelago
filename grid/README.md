@@ -7,15 +7,16 @@ grid resumes where it left off.
 ```bash
 cd grid
 uv sync --locked
-uv run --locked python -m grid validate ../examples/grid/grid.json
-uv run --locked python -m grid run ../examples/grid/grid.json
-uv run --locked python -m grid status ../examples/grid/grid.json
-uv run --locked python -m grid serve ../examples/grid/grid.json   # dashboard API on 127.0.0.1:7070 (not 7000: macOS AirPlay listens there)
+uv run --locked python -m grid validate ../examples/grid/grid_text.json
+uv run --locked python -m grid run ../examples/grid/grid_text.json
+uv run --locked python -m grid status ../examples/grid/grid_text.json
+uv run --locked python -m grid serve ../examples/grid/grid_text.json   # dashboard API on 127.0.0.1:7070 (not 7000: macOS AirPlay listens there)
 ```
 
 `agents/.env` and `grading/.env` need the provider keys for the models and the
-judge, as for the examples. Each runner reads its own file. The grid itself
-never reads keys. `validate` asks each runner whether its keys are present and
+judge, as for the examples. Each runner reads its own file, and so does the
+simulated human (`human`, below), from `agents/.env`. The grid itself never
+reads keys. `validate` asks each runner whether its keys are present and
 prints only the key names that are missing.
 
 ## Inputs
@@ -71,9 +72,71 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `pass_score` | 1.0 | The score a run needs to count as a pass on the leaderboard |
 | `agent_grace_sec` | 600 | Seconds past the agent's own wall clock before the grid kills it (scored as a timeout) |
 | `grading_timeout_sec` | 3600 | Seconds before the grid kills a grading attempt and reruns grading |
+| `human` | off | `{"model": ..., "extra_args": ..., "max_questions": null}`: a simulated human the models can ask (below). `max_questions` is a whole number or null; `extra_args` can't set `model`, `messages` or `tools` |
 
 Each rubric criterion becomes one `output_llm` verifier. The first one is the
 primary objective.
+
+### Simulated human
+
+With `human` set, every run gets one more MCP server, `human_server`, with one
+tool: `ask_human(question)`. The model being tested uses it to ask the person
+who assigned the task. An LLM (`human.model`, the same one for every model in
+the grid) plays that person. It knows:
+
+- the task prompt
+- its persona: `world_descriptions.json` → `{"world_id": ..., "human":
+  {"persona": "..."}}`. Without one, it's accommodating and answers in one to
+  three sentences.
+- `.apps_data/human/knowledge.md` in the world zip or task overlay: what it
+  knows from memory
+- the names of the files in `.apps_data/human/files/`. It doesn't read them.
+  Like a person, it answers from memory, points to a path in the agent's files,
+  or shares one of its own files. A shared file is uploaded to
+  `/from_user/<name>` in the agent's filesystem (two files with the same name
+  get `name-2.ext`), and the reply ends with `Shared: /from_user/<name>`.
+
+Shared files are new files in the final state, so rubrics that check outputs
+should expect them under `/from_user/`.
+
+- The human keeps the conversation for the run, so follow-ups make sense.
+- Past `max_questions`, or when its model call fails after retries, it
+  replies that the human is unavailable and the agent should proceed. A
+  failed call doesn't use up a question.
+- If a file can't be shared (the upload fails, or it names a file it doesn't
+  have), the reply says so and tells the agent to proceed without it.
+- `validate` checks that its provider key is in `agents/.env`. Its token use
+  is logged to the run's `human.log` only, not counted on the leaderboard.
+
+**Where it runs.** The human runs on the host, outside the sandbox, the same
+way the agent runner does. The grid starts one human server per agent attempt
+(`grid/grid/human.py`) and points `human_server` in `/apps` at it over HTTP.
+Model code in the sandbox can't read the human's provider key or its folder,
+however it gets past the code sandbox, because neither is in the container:
+
+- `.apps_data/human/` is left out of the tarballs the sandbox is populated with
+  and laid out on the host instead (`.cache/humans/`).
+- The server reads its key from `agents/.env` with dotenv, as the agent runner
+  does. Nothing with a key is posted to the environment or written to the run.
+- Shared files go into the sandbox through the environment's `/data/populate`,
+  extracted at `/filesystem` as `from_user/<name>`. If the agent turns
+  `/from_user/` or a file in it into a symlink out of `/filesystem`, the share
+  is refused. A share does replace a file the agent itself wrote at the same
+  path.
+- The sandbox reaches the server at `host.docker.internal` (mapped to
+  `host-gateway` on every container), under a random path token per run.
+  With the token, a caller can only ask the human, which the agent can
+  already do.
+- The server listens on the default bridge's gateway on native Linux (for
+  example `172.17.0.1`), and on `127.0.0.1` with Docker Desktop, where the
+  bridge is in a VM. Never on `0.0.0.0`.
+- It stops with its run, and on its own if the grid process dies.
+- The grid installs its dependencies (`uv sync --locked` in
+  `mcp_servers/human`) when a grid with `human` starts. Nothing to set up.
+
+On Linux, a firewall that drops traffic from Docker's bridge to the host (ufw's
+default) blocks it. The run then fails at `apps_starting` with "the sandbox
+can't reach ...". Allow it with `sudo ufw allow in on docker0`.
 
 ## What a run does
 
@@ -84,7 +147,7 @@ primary objective.
    BuildKit.
 2. Populate the world, then the task overlay. Snapshot that state as
    `initial.zip`: grading compares the final state against it.
-3. `POST /apps` with the MCP config.
+3. `POST /apps` with the MCP config (with `human`, the human server's env filled in for this task).
 4. Run the agent, with `FILE_LOGGING` writing its events to `agent_events.jsonl`.
 5. Snapshot the final state (`final.zip`), then stop the environment.
 6. Grade.

@@ -1,0 +1,22 @@
+[
+  {
+    "task_id": "pick_venue",
+    "task_name": "Pick the offsite venue and meal order",
+    "world_id": "offsite",
+    "prompt": "Pick the venue for our team offsite from the shortlist, and tell me how many meals of each type to order. Give both in your final answer.",
+    "rubric": [
+      {"criteria": "The final answer picks Harbor Loft as the venue"},
+      {"criteria": "The final answer orders 9 standard, 4 vegetarian and 2 vegan meals"}
+    ]
+  },
+  {
+    "task_id": "cheapest_seat",
+    "task_name": "Cheapest venue per seat",
+    "world_id": "offsite",
+    "prompt": "Which shortlisted venue has the lowest price per day for each seat of capacity, and what is that price? Give it in your final answer.",
+    "rubric": [
+      {"criteria": "The final answer names Pine Hall"},
+      {"criteria": "The final answer gives about $73.33 per seat per day"}
+    ]
+  }
+]
