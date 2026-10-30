@@ -31,6 +31,8 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
    - A failed human model call tells the agent the human is unavailable, so
      the agent carries on without an answer. Decide whether to flag those
      runs as infra.
+   - Give each answer an overall deadline under the agent's tool-call
+     timeout (180 s), and drop the answer if it passes.
 
 ### Small fixes
 

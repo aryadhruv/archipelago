@@ -16,6 +16,11 @@ the task. An LLM plays that person (`mcp_servers/human_server/sim.py`):
 - **When it fails:** past the question cap, or when its model call fails
   after retries, the agent is told the human is unavailable and to proceed.
   A failed call doesn't count toward the cap.
+- **No overall deadline (known gap).** One question can take up to 3 model
+  calls, each with litellm's retries. If that outlasts the agent's tool-call
+  timeout (180 s in the toolbelt agent), the agent gets a timeout error that
+  counts against the model, and the human may still finish the answer, and
+  upload a file, after the agent has moved on.
 
 It runs outside the agent's sandbox (the grid starts it on the host, see
 `grid/grid/human.py`), so its provider key and its folder never enter it.
