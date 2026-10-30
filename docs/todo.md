@@ -33,6 +33,14 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      runs as infra.
    - Give each answer an overall deadline under the agent's tool-call
      timeout (180 s), and drop the answer if it passes.
+   - Files the human shares are graded as if the agent created them: the
+     diff runs from `initial.zip`, taken before any share. Fine while shared
+     files are inputs the agent doesn't edit. Plan when it matters (grid
+     only, no grader change; details on PR #14): the human server keeps a
+     copy of each share in the attempt dir; grading gets a starting snapshot
+     with the shares added, so only the agent's edits count; each rubric line
+     lists the shares as reference artifacts, which the judge sees as context.
+     Telling the judge a file came from the user would need a grader change.
 
 ### Small fixes
 
