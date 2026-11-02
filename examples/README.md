@@ -15,6 +15,13 @@ echo 'OPENROUTER_API_KEY=sk-or-...' >> grading/.env
 (cd grid && uv sync --locked)
 ```
 
+To route every call through a LiteLLM proxy instead, set
+`LITELLM_PROXY_API_BASE` and `LITELLM_PROXY_API_KEY` in both `.env` files and
+use the proxy's aliases as model strings (`litellm_proxy/<alias>`) in your
+grid's `models.json` (or the example configs), the judge and the human. Set
+`context_window_tokens` for each alias the context-window table doesn't know,
+or the agent assumes 128k.
+
 There are three types of grid example. Each uses free OpenRouter models in
 every role (tested models and judge, plus the human for `hil`), chosen so that
 every model can do the task:

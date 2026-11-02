@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import math
+import re
 import statistics
 import time
 import zipfile
@@ -37,10 +38,23 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+# A Bedrock-style id, ``us.anthropic.claude-...``: an optional region, then a
+# Bedrock vendor. Other dotted aliases (``my.team.model``) don't match.
+_DOTTED_VENDOR = re.compile(
+    r"^(?:(?:us|eu|apac|global|jp|au)\.)?"
+    r"(anthropic|amazon|meta|mistral|cohere|ai21|deepseek|qwen|openai|writer)\."
+)
+
+
 def _provider(model: str) -> str:
-    parts = model.split("/")
+    """The model's vendor, for display: ``openrouter/<vendor>/...`` gives the vendor,
+    a ``litellm_proxy/`` prefix is dropped, and a Bedrock id gives its vendor."""
+    parts = model.removeprefix("litellm_proxy/").split("/")
     if parts[0] == "openrouter" and len(parts) > 2:
         return parts[1]
+    if parts[0] == "bedrock" or len(parts) == 1:
+        if match := _DOTTED_VENDOR.match(parts[-1]):
+            return match.group(1)
     return parts[0]
 
 

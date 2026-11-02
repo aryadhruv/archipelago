@@ -1,4 +1,7 @@
+import pytest
+
 from grid.store import run_id_for
+from grid.views import _provider
 
 
 def test_grid(setup):
@@ -149,3 +152,22 @@ def test_demo_is_served_under_its_own_path(setup):
     assert client.get("/demo", follow_redirects=False).headers["location"] == "/demo/"
     assert "Archipelago" in client.get("/demo/").text
     assert client.get("/demo/mock/summary.json").json()["state"]
+
+
+@pytest.mark.parametrize(
+    ("model", "provider"),
+    [
+        ("openrouter/vendor-a/m", "vendor-a"),
+        ("litellm_proxy/openrouter/vendor-a/m", "vendor-a"),
+        ("litellm_proxy/azure/gpt-5.4-mini", "azure"),
+        ("bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0", "anthropic"),
+        ("litellm_proxy/anthropic.claude-sonnet-4-5", "anthropic"),
+        ("litellm_proxy/gpt-5.4-mini", "gpt-5.4-mini"),
+        ("anthropic/claude-sonnet-4-5", "anthropic"),
+        ("litellm_proxy/my.team.model", "my.team.model"),
+        ("us.foo", "us.foo"),
+        ("bedrock/my.model", "bedrock"),
+    ],
+)
+def test_provider(model, provider):
+    assert _provider(model) == provider

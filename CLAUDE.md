@@ -25,7 +25,7 @@ cd examples/simple_task && bash run.sh     # run.sh had no exec bit upstream
 ```
 
 - Always use `uv sync --locked`: the lockfiles pin every dependency, and this fork dropped upstream's `exclude-newer` cutoffs. The image pins uv 0.13.4. An unlocked sync pulls a newer `mcp` that breaks `from mcp import McpError`.
-- Model strings look like `openrouter/anthropic/claude-sonnet-5.5`. The judge is set in `grading_settings.json` with `llm_judge_model`.
+- Model strings look like `openrouter/anthropic/claude-sonnet-5.5`, or `litellm_proxy/<alias>` with `LITELLM_PROXY_API_BASE`/`_KEY` set (every call then goes through the proxy). The judge is set in `grading_settings.json` with `llm_judge_model`.
 - `mcp_config.json` needs the server's own venv Python (`/app/mcp_servers/<server>/.venv/bin/python`) and `MCP_TRANSPORT=stdio`. Without it you get `ModuleNotFoundError: mcp_schema`, or the server starts over HTTP on :5000.
 - With `ENV=local` and the env vars unset, Mercor-internal code paths are inactive: the LLM gateway, Mercor's document cache, cost ledgers, Datadog, Redis, Modal and webhooks.
 - The examples run on free OpenRouter models in every role. There are three grid types (text, images, human-in-the-loop; see `examples/README.md`), each with models that can do its task.

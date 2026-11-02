@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 
+import litellm
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
@@ -47,6 +48,10 @@ if __name__ == "__main__":
     # variables already set win.
     if env_file := os.getenv("HUMAN_ENV_FILE"):
         load_dotenv(env_file, override=False)
+    # Route through a LiteLLM proxy when one is configured, as the agent
+    # runner does, so the human's model resolves to the same proxy aliases.
+    if os.getenv("LITELLM_PROXY_API_BASE") and os.getenv("LITELLM_PROXY_API_KEY"):
+        litellm.use_litellm_proxy = True
     # Fail now, with the reason in the log, rather than on every question.
     load_config()
     if parent := os.getenv("HUMAN_PARENT_PID"):
