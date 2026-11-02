@@ -26,7 +26,21 @@ what we removed.
 - **Per-runner `.env` loading.** The agent and grading CLIs each load their own
   `.env` (`agents/.env`, `grading/.env`); variables already set win. Each exits
   at startup if the orchestrator or judge model's provider key is missing.
-  The check is skipped when `LLM_GATEWAY_API_BASE` is set.
+  The check is skipped when `LLM_GATEWAY_API_BASE` is set. When both
+  `LITELLM_PROXY_API_BASE` and `LITELLM_PROXY_API_KEY` are set, it instead
+  calls the proxy's `GET /v1/models` and exits unless the key is accepted and
+  each model (without its `litellm_proxy/` prefix) is listed or matched by a
+  wildcard route. `/v1/models` leaves out some aliases the proxy still routes
+  (router group aliases, per-key aliases); `LITELLM_PROXY_CHECK_MODELS=false`
+  then checks only the key. The grid's preflight uses the same check.
+- **LiteLLM proxy routing.** With `LITELLM_PROXY_API_BASE` and
+  `LITELLM_PROXY_API_KEY` set, the agent runner, the grader and the simulated
+  human all send every call through the proxy, so model strings are its aliases.
+  The context-window table drops a `litellm_proxy/` prefix only before a known
+  lane (`litellm_proxy/anthropic/...`); a bare alias, or one in another lane
+  (`azure/...`), needs `context_window_tokens`. The
+  grid's provider label drops `litellm_proxy/` and reads the vendor from a
+  Bedrock-style id (`us.anthropic.claude-...` gives `anthropic`).
 - **`CONTEXT_WINDOW_FALLBACK_ENABLED`** (agents, default `true`). Set it to
   `false` to raise instead of assuming a 128k-token window for a model whose
   window is unknown. This is always the case for `openrouter/` models, so with

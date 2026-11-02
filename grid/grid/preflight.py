@@ -12,6 +12,7 @@ from grid.worker import AGENTS_DIR, GRADING_DIR
 
 # Asks a runner whether its own .env (or the environment) has each model's
 # provider key, with the runner's own check. It prints key names, never values.
+# Behind a LiteLLM proxy the check asks the proxy for its key and model list.
 _KEY_CHECK = (
     "import sys\n"
     "from runner.utils.env_file import load_env_file, require_provider_keys\n"
@@ -121,7 +122,7 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
         checks.append(
             await _key_check(
                 "agent_keys",
-                "Provider keys for the models (agents/.env)",
+                "Provider keys or proxy for the models (agents/.env)",
                 AGENTS_DIR,
                 [m.model for m in grid.models],
             )
@@ -129,7 +130,7 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
         checks.append(
             await _key_check(
                 "judge_key",
-                "Provider key for the judge (grading/.env)",
+                "Provider key or proxy for the judge (grading/.env)",
                 GRADING_DIR,
                 [grid.grading_settings["llm_judge_model"]],
             )
@@ -139,7 +140,7 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
             checks.append(
                 await _key_check(
                     "human_key",
-                    "Provider key for the simulated human (agents/.env)",
+                    "Provider key or proxy for the simulated human (agents/.env)",
                     AGENTS_DIR,
                     [grid.human.model],
                 )

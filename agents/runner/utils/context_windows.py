@@ -132,6 +132,10 @@ CONTEXT_WINDOW_TOKENS: dict[str, int] = {
 # Studio routes OpenAI Responses-API models as ``openai/responses/<model>``; the
 # segment is a routing convention, not part of any model id.
 _ROUTING_SEGMENTS = frozenset({"responses"})
+# ``litellm_proxy/<alias>`` sends a call through a LiteLLM proxy. The prefix is
+# dropped only before a known lane (``litellm_proxy/anthropic/...``): a bare
+# alias such as ``litellm_proxy/gpt-5-pro`` may be served from any lane.
+_PROXY_PREFIX = "litellm_proxy"
 # Leading ``lane/`` segments are dropped only for lanes Studio is known to
 # route through and whose windows this table has been checked against. An
 # unknown lane (``azure/gpt-5-pro`` serves 272k where OpenAI direct serves
@@ -182,6 +186,10 @@ def lookup_context_window(model: str) -> int | None:
         for s in model.strip().lower().split("/")
         if s and s not in _ROUTING_SEGMENTS
     ]
+    if segments and segments[0] == _PROXY_PREFIX:
+        if len(segments) < 2 or segments[1] not in _KNOWN_LANES:
+            return None
+        segments = segments[1:]
     if not segments:
         return None
     for i in range(len(segments)):
