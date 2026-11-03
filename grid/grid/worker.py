@@ -118,7 +118,8 @@ class Worker:
     def _state(self, run: Run, state: str, **fields: Any) -> None:
         self.store.update_run(run.run_id, state=state, **fields)
         self._emit(run, "run_state", state=state, text=fields.get("reason"), **fields)
-        self.log(f"{run.run_id}: {state}")
+        reason = f" ({fields['reason']})" if fields.get("reason") else ""
+        self.log(f"{run.run_id}: {state}{reason}")
 
     async def execute(self, run: Run, port: int) -> None:
         """Advance the run by one attempt and leave it scored, gave_up or retry."""
@@ -270,12 +271,12 @@ class Worker:
             final = await env.snapshot(directory / "final.tar.gz")
             await asyncio.to_thread(tar_gz_to_zip, final, directory / "final.zip")
             final.unlink()
-        except INFRA_ERRORS:
-            await env.save_logs(directory / "env.log")
-            raise
         finally:
             if human is not None:
                 await human.stop()
+            # Kept on every run: the MCP servers' output explains a tool that
+            # misbehaved even when the run itself succeeded.
+            await env.save_logs(directory / "env.log")
             await env.down()
 
         trajectory = trajectory or {}
