@@ -18,6 +18,7 @@ from grid.inputs import InputError, load_grid
 from grid.preflight import run_preflight, summarize
 from grid.scheduler import Log, Scheduler, grid_order
 from grid.store import Store
+from grid.views import write_results
 
 _MARK = {"pass": "ok  ", "warn": "WARN", "fail": "FAIL"}
 
@@ -64,6 +65,7 @@ async def _run(args) -> int:
     store = Store(grid.grid_dir / "grid.db")
     try:
         counts = await Scheduler(grid, store, log).run(rebuild=args.rebuild)
+        write_results(grid, store)
     finally:
         store.close()
     log(f"Done: {counts}")

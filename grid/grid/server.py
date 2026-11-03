@@ -75,6 +75,7 @@ class GridControl:
     async def _run(self) -> None:
         try:
             await self.scheduler.run(rebuild=self.rebuild)
+            views.write_results(self.grid, self.store)
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -349,11 +350,7 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
 
     @app.get("/api/export.json")
     def export_json() -> dict[str, Any]:
-        return {
-            "grid": views.grid_view(grid, store),
-            "runs": views.runs_view(store),
-            "leaderboard": views.leaderboard_view(grid, store),
-        }
+        return views.export_json(grid, store)
 
     @app.get("/api/stream")
     async def stream(

@@ -192,9 +192,10 @@ containers.
 <output_dir>/<grid_id>/
   grid.db            runs, attempts, events (SQLite)
   grid.log           the grid's own output (preflight, scheduler, worker errors)
+  results.csv, results.json   the export, written when the grid finishes
   manifest.json      image, commit, tasks, models, judge
   <task_id>/<model_id>/r<repeat>/a<attempt>/
-    initial.zip, final.zip, trajectory.json, grades.json
+    initial.zip, final.zip, trajectory.json, grades.json (latest), grades.<n>.json (each grading attempt)
     agent_events.jsonl, agent.stdout.log, grading.<n>.stdout.log, env.log
     initial_messages.json, agent_config.json, verifiers.json, ...
 <output_dir>/.cache/  packed worlds, reused across runs and grids

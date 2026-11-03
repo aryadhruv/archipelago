@@ -1,7 +1,9 @@
+import json
+
 import pytest
 
 from grid.store import run_id_for
-from grid.views import _provider
+from grid.views import _provider, write_results
 
 
 def test_grid(setup):
@@ -87,6 +89,15 @@ def test_leaderboard_and_export(setup):
     csv = client.get("/api/export.csv").text.splitlines()
     assert csv[0].startswith("run_id,task_id,model_id")
     assert len(csv) == 5
+
+
+def test_write_results(setup):
+    grid, store, client = setup
+    write_results(grid, store)
+    saved_csv = (grid.grid_dir / "results.csv").read_text().splitlines()
+    assert saved_csv == client.get("/api/export.csv").text.splitlines()
+    saved = json.loads((grid.grid_dir / "results.json").read_text())
+    assert saved["leaderboard"] == client.get("/api/leaderboard").json()
 
 
 def test_events_and_manual_retry(setup, monkeypatch):

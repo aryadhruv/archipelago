@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
 import signal
 import time
 from collections.abc import AsyncIterator, Callable
@@ -36,6 +37,17 @@ RETRY_BACKOFF_SEC = 30
 RETRY_BACKOFF_MAX_SEC = 600
 
 Log = Callable[[str], None]
+
+
+def _criterion(result: dict[str, Any]) -> dict[str, Any]:
+    """One verifier's result, with the judge's verdict and rationale."""
+    values = result.get("verifier_result_values") or {}
+    return {
+        "verifier_id": result.get("verifier_id"),
+        "score": result.get("score"),
+        "grade": values.get("judge_grade"),
+        "rationale": values.get("grade_rationale"),
+    }
 
 
 def _read_json(path: Path) -> Any:
@@ -431,6 +443,9 @@ class Worker:
             )
         else:
             outcome = classify_grading(_read_json(grades_path))
+        # grades.json is the latest result; each attempt's own copy stays.
+        if grades_path.exists():
+            shutil.copyfile(grades_path, directory / f"grades.{number}.json")
         grades = _read_json(grades_path) if outcome.verdict == Verdict.SCORED else None
         self.store.finish_attempt(attempt_id, outcome.verdict.value, outcome.reason)
         if outcome.verdict == Verdict.SCORED:
@@ -441,8 +456,7 @@ class Worker:
                 text=f"Score {outcome.score:.2f}",
                 score=outcome.score,
                 criteria=[
-                    {"verifier_id": v.get("verifier_id"), "score": v.get("score")}
-                    for v in (grades or {}).get("verifier_results") or []
+                    _criterion(v) for v in (grades or {}).get("verifier_results") or []
                 ],
             )
         return outcome

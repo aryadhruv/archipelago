@@ -448,3 +448,19 @@ def export_csv(store: Store) -> str:
     for run in store.runs():
         writer.writerow(run_row(run))
     return out.getvalue()
+
+
+def export_json(grid: Grid, store: Store) -> dict[str, Any]:
+    return {
+        "grid": grid_view(grid, store),
+        "runs": runs_view(store),
+        "leaderboard": leaderboard_view(grid, store),
+    }
+
+
+def write_results(grid: Grid, store: Store) -> None:
+    """Save the export next to grid.db, so results don't depend on the API."""
+    (grid.grid_dir / "results.csv").write_text(export_csv(store))
+    (grid.grid_dir / "results.json").write_text(
+        json.dumps(export_json(grid, store), indent=2, default=str)
+    )
