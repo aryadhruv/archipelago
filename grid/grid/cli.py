@@ -16,20 +16,29 @@ from pathlib import Path
 from grid.envctl import reap
 from grid.inputs import InputError, load_grid
 from grid.preflight import run_preflight, summarize
-from grid.scheduler import Scheduler, grid_order
+from grid.scheduler import Log, Scheduler, grid_order
 from grid.store import Store
+from grid.views import write_results
 
 _MARK = {"pass": "ok  ", "warn": "WARN", "fail": "FAIL"}
 
 
-def _log(message: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+def _file_log(path: Path) -> Log:
+    """Print each line and append it, dated, to the grid's grid.log."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    def log(message: str) -> None:
+        print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}\n")
+
+    return log
 
 
-def _print_checks(result: dict) -> None:
+def _print_checks(result: dict, log: Log = print) -> None:
     for check in result["checks"]:
         detail = f"  ({check['detail']})" if check["detail"] else ""
-        print(f"  {_MARK[check['status']]} {check['label']}{detail}")
+        log(f"  {_MARK[check['status']]} {check['label']}{detail}")
 
 
 async def _validate(args) -> int:
@@ -46,18 +55,20 @@ async def _validate(args) -> int:
 
 async def _run(args) -> int:
     grid = load_grid(args.config)
+    log = _file_log(grid.grid_dir / "grid.log")
     if not args.skip_preflight:
         result = summarize(await run_preflight(grid))
-        _print_checks(result)
+        _print_checks(result, log)
         if not result["ok"]:
-            print("Preflight failed; fix the checks above or pass --skip-preflight.")
+            log("Preflight failed; fix the checks above or pass --skip-preflight.")
             return 1
     store = Store(grid.grid_dir / "grid.db")
     try:
-        counts = await Scheduler(grid, store, _log).run(rebuild=args.rebuild)
+        counts = await Scheduler(grid, store, log).run(rebuild=args.rebuild)
+        write_results(grid, store)
     finally:
         store.close()
-    _log(f"Done: {counts}")
+    log(f"Done: {counts}")
     return 0 if not counts.get("gave_up") else 2
 
 
@@ -68,7 +79,7 @@ async def _serve(args) -> int:
     store = Store(grid.grid_dir / "grid.db")
     try:
         await serve(
-            grid, store, _log, host=args.host, port=args.port,
+            grid, store, _file_log(grid.grid_dir / "grid.log"), host=args.host, port=args.port,
             start=args.start, rebuild=args.rebuild,
         )  # fmt: skip
     finally:

@@ -44,6 +44,14 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
 
 ### Small fixes
 
+- `examples/grid/models_text.json` lists `poolside/laguna-s-2.1:free`, which
+  OpenRouter has dropped (404). Replace it with a free model that's still
+  served.
+- A model that doesn't exist (404) is retried as an agent rerun, starting a
+  container each time. Have preflight check that every model is served, or
+  classify a 404 as a config error that doesn't retry.
+- `env.log` is mostly noise: fastmcp's update banner on every server start
+  and DEBUG `tools/list` dumps. Turn both off in the MCP servers.
 - Optional: bind the environment port to `127.0.0.1` in
   `environment/docker-compose.yml`, so the sandbox isn't reachable from the
   network.

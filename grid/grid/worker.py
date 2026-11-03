@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
 import signal
 import time
 from collections.abc import AsyncIterator, Callable
@@ -36,6 +37,17 @@ RETRY_BACKOFF_SEC = 30
 RETRY_BACKOFF_MAX_SEC = 600
 
 Log = Callable[[str], None]
+
+
+def _criterion(result: dict[str, Any]) -> dict[str, Any]:
+    """One verifier's result, with the judge's verdict and rationale."""
+    values = result.get("verifier_result_values") or {}
+    return {
+        "verifier_id": result.get("verifier_id"),
+        "score": result.get("score"),
+        "grade": values.get("judge_grade"),
+        "rationale": values.get("grade_rationale"),
+    }
 
 
 def _read_json(path: Path) -> Any:
@@ -118,7 +130,8 @@ class Worker:
     def _state(self, run: Run, state: str, **fields: Any) -> None:
         self.store.update_run(run.run_id, state=state, **fields)
         self._emit(run, "run_state", state=state, text=fields.get("reason"), **fields)
-        self.log(f"{run.run_id}: {state}")
+        reason = f" ({fields['reason']})" if fields.get("reason") else ""
+        self.log(f"{run.run_id}: {state}{reason}")
 
     async def execute(self, run: Run, port: int) -> None:
         """Advance the run by one attempt and leave it scored, gave_up or retry."""
@@ -270,12 +283,12 @@ class Worker:
             final = await env.snapshot(directory / "final.tar.gz")
             await asyncio.to_thread(tar_gz_to_zip, final, directory / "final.zip")
             final.unlink()
-        except INFRA_ERRORS:
-            await env.save_logs(directory / "env.log")
-            raise
         finally:
             if human is not None:
                 await human.stop()
+            # Kept on every run: the MCP servers' output explains a tool that
+            # misbehaved even when the run itself succeeded.
+            await env.save_logs(directory / "env.log")
             await env.down()
 
         trajectory = trajectory or {}
@@ -430,6 +443,9 @@ class Worker:
             )
         else:
             outcome = classify_grading(_read_json(grades_path))
+        # grades.json is the latest result; each attempt's own copy stays.
+        if grades_path.exists():
+            shutil.copyfile(grades_path, directory / f"grades.{number}.json")
         grades = _read_json(grades_path) if outcome.verdict == Verdict.SCORED else None
         self.store.finish_attempt(attempt_id, outcome.verdict.value, outcome.reason)
         if outcome.verdict == Verdict.SCORED:
@@ -440,8 +456,7 @@ class Worker:
                 text=f"Score {outcome.score:.2f}",
                 score=outcome.score,
                 criteria=[
-                    {"verifier_id": v.get("verifier_id"), "score": v.get("score")}
-                    for v in (grades or {}).get("verifier_results") or []
+                    _criterion(v) for v in (grades or {}).get("verifier_results") or []
                 ],
             )
         return outcome

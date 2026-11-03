@@ -191,10 +191,12 @@ containers.
 ```
 <output_dir>/<grid_id>/
   grid.db            runs, attempts, events (SQLite)
+  grid.log           the grid's own output (preflight, scheduler, worker errors)
+  results.csv, results.json   the export, written when the grid finishes
   manifest.json      image, commit, tasks, models, judge
   <task_id>/<model_id>/r<repeat>/a<attempt>/
-    initial.zip, final.zip, trajectory.json, grades.json
-    agent_events.jsonl, agent.stdout.log, grading.<n>.stdout.log, env.log (on infra failure)
+    initial.zip, final.zip, trajectory.json, grades.json (latest), grades.<n>.json (each grading attempt)
+    agent_events.jsonl, agent.stdout.log, grading.<n>.stdout.log, env.log
     initial_messages.json, agent_config.json, verifiers.json, ...
 <output_dir>/.cache/  packed worlds, reused across runs and grids
 ```
@@ -250,7 +252,8 @@ tokens, text, state, path`):
   `{server}_{tool}` name, paired by `ref` and timed), `reasoning`, `response`,
   `toolbelt`, `compaction`, `final_answer`.
 - **Grading's output.** The judge's start and result lines become
-  `grading_progress`, and the final score becomes `grade`.
+  `grading_progress`, and the final score becomes `grade`, with each
+  criterion's score, judge verdict and rationale.
 - **The grid itself.** `run_state` on every state change, `infra` for errors
   and retries, and `grid_state` for the grid as a whole.
 

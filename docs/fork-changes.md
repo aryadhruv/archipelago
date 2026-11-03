@@ -70,6 +70,13 @@ what we removed.
   grid resumes. Unlike `examples/hugging_face_task`, it grades runs whose agent
   `failed` (they count), and grades against a snapshot taken after the world
   and the task overlay are loaded. See `grid/README.md`.
+  `run` and `serve` also append their own output to `<grid_dir>/grid.log`,
+  and every attempt keeps its container's logs in `env.log`, not only
+  attempts that hit an infra error.
+  When a grid finishes, `run` and `serve` write `results.csv` and
+  `results.json` (the same data as the export endpoints) next to `grid.db`.
+  Each grading attempt keeps its own `grades.<n>.json`, and the `grade` event
+  in `grid.db` carries each criterion's judge verdict and rationale.
 
 - **Per-call usage log in `react_toolbelt_agent`.** After each model call it
   logs `message_type="llm_usage"` at DEBUG with `prompt_tokens`,
