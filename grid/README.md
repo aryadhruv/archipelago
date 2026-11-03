@@ -252,7 +252,8 @@ tokens, text, state, path`):
   `{server}_{tool}` name, paired by `ref` and timed), `reasoning`, `response`,
   `toolbelt`, `compaction`, `final_answer`.
 - **Grading's output.** The judge's start and result lines become
-  `grading_progress`, and the final score becomes `grade`.
+  `grading_progress`, and the final score becomes `grade`, with each
+  criterion's score, judge verdict and rationale.
 - **The grid itself.** `run_state` on every state change, `infra` for errors
   and retries, and `grid_state` for the grid as a whole.
 

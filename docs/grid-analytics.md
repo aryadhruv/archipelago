@@ -146,6 +146,9 @@ A new agent attempt resets the totals, so the numbers always describe the
 - **`/api/export.csv` and `/api/export.json`:** one row per run with its raw
   fields (state, score, classification, attempts, tokens, duration, reason).
   The API doesn't aggregate them; use these to recompute anything differently.
+- **`results.csv` and `results.json` next to `grid.db`:** the same two
+  exports, written when `run` or `serve` finishes a grid, so results are on
+  disk without the dashboard.
 - **The leaderboard page's CSV:** built in the browser from the leaderboard
   response, one row per model with the columns above.
 
