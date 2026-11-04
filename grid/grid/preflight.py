@@ -4,6 +4,7 @@ import asyncio
 import zipfile
 from dataclasses import asdict, dataclass
 
+import httpx
 from docker.errors import DockerException
 
 from grid.envctl import InfraError, client, run_cmd
@@ -19,6 +20,10 @@ _KEY_CHECK = (
     "load_env_file()\n"
     "require_provider_keys(*sys.argv[1:])\n"
 )
+
+# OpenRouter's public model list. A model it no longer serves returns 404 on
+# every call, which the grid would otherwise retry as an agent error.
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 
 @dataclass
@@ -109,6 +114,30 @@ async def _key_check(id_: str, label: str, cwd, models: list[str]) -> Check:
     )
 
 
+async def _openrouter_check(models: list[str]) -> Check | None:
+    """Fail if OpenRouter no longer serves a model; warn if the list is unreachable."""
+    wanted = sorted(
+        {m.removeprefix("openrouter/") for m in models if m.startswith("openrouter/")}
+    )
+    if not wanted:
+        return None
+    label = "OpenRouter serves every model"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(OPENROUTER_MODELS_URL)
+            response.raise_for_status()
+            served = {m["id"] for m in response.json()["data"]}
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+        return Check("openrouter_models", label, "warn", f"couldn't list models: {e!r}")
+    missing = [m for m in wanted if m not in served]
+    return Check(
+        "openrouter_models",
+        label,
+        "fail" if missing else "pass",
+        f"not served: {', '.join(missing)}" if missing else "",
+    )
+
+
 async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
     checks = _inputs_checks(grid) + _model_checks(grid)
 
@@ -145,6 +174,13 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
                     [grid.human.model],
                 )
             )
+        models = [m.model for m in grid.models] + [
+            grid.grading_settings["llm_judge_model"]
+        ]
+        if grid.human is not None:
+            models.append(grid.human.model)
+        if check := await _openrouter_check(models):
+            checks.append(check)
     return checks
 
 

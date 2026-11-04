@@ -77,6 +77,12 @@ what we removed.
   `results.json` (the same data as the export endpoints) next to `grid.db`.
   Each grading attempt keeps its own `grades.<n>.json`, and the `grade` event
   in `grid.db` carries each criterion's judge verdict and rationale.
+  Preflight fails when OpenRouter no longer serves one of the grid's models
+  (tested, judge or human), instead of each run retrying a 404. Grid's
+  default `mcp_config.json` starts each MCP server with
+  `FASTMCP_SHOW_SERVER_BANNER=false`, `FASTMCP_CHECK_FOR_UPDATES=off` and
+  `LOGURU_LEVEL=INFO`, so `env.log` keeps warnings and errors without the
+  banner and DEBUG `tools/list` dumps.
 
 - **Per-call usage log in `react_toolbelt_agent`.** After each model call it
   logs `message_type="llm_usage"` at DEBUG with `prompt_tokens`,

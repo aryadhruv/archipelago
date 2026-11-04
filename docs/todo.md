@@ -42,16 +42,23 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      lists the shares as reference artifacts, which the judge sees as context.
      Telling the judge a file came from the user would need a grader change.
 
+4. **Email attachments.** Mail attachments are names only. `send_mail`,
+   `reply_mail` and `reply_all_mail` take an `attachments` list but only
+   record the file names in an `X-Attachments` header; no file goes with the
+   message. `read_mail` lists the names of a seeded message's MIME
+   attachments, but no tool saves one where other tools can open it. To
+   support them:
+   - Sending: attach files from `/filesystem` as real MIME parts.
+   - Receiving: a tool that saves an attachment into `/filesystem`, so the
+     pdf, sheets and docs servers can open it.
+   - Supplying them: a way for task authors to give a world's or task's mail
+     attachments (for example `.eml` files plus their attachments, built
+     into the mbox when the world is packed), so a task can hand the agent
+     files by mail as needed.
+   - Grading: the judge sees what was attached to mail the agent sent.
+
 ### Small fixes
 
-- `examples/grid/models_text.json` lists `poolside/laguna-s-2.1:free`, which
-  OpenRouter has dropped (404). Replace it with a free model that's still
-  served.
-- A model that doesn't exist (404) is retried as an agent rerun, starting a
-  container each time. Have preflight check that every model is served, or
-  classify a 404 as a config error that doesn't retry.
-- `env.log` is mostly noise: fastmcp's update banner on every server start
-  and DEBUG `tools/list` dumps. Turn both off in the MCP servers.
 - Optional: bind the environment port to `127.0.0.1` in
   `environment/docker-compose.yml`, so the sandbox isn't reachable from the
   network.
@@ -110,6 +117,13 @@ Apply these in every grid.
 - **Dashboard** (`grid serve`): setup and preflight, Mission Control, the
   Live Map (live, focus with the world's files, replay), run detail,
   leaderboard and infra, on the API's REST endpoints and event stream.
+- **Grid logs and results on disk.** `grid.log`, `env.log` on every attempt,
+  reasons on retry and give-up lines, `results.csv`/`results.json` when a grid
+  finishes, `grades.<n>.json` per grading attempt, and the judge's verdict
+  and rationale in `grid.db` (#16).
+- **Logging follow-ups.** Preflight fails when OpenRouter no longer serves a
+  model, the examples swap the dropped Laguna model for Gemma 4 31B, and
+  grid's MCP servers start without fastmcp's banner and DEBUG logs.
 - **Examples on free models.** Three grid types, each with free OpenRouter
   models that can do its task: text (`examples/grid/grid_text.json`), images
   (`grid_images.json`, models that read images) and human-in-the-loop

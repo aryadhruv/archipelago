@@ -1,8 +1,8 @@
 [
   {
-    "id": "laguna-s-free",
-    "label": "Laguna S 2.1 (free)",
-    "model": "openrouter/poolside/laguna-s-2.1:free",
+    "id": "gemma-4-31b-free",
+    "label": "Gemma 4 31B (free)",
+    "model": "openrouter/google/gemma-4-31b-it:free",
     "context_window_tokens": 262144
   },
   {
