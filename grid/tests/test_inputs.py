@@ -12,6 +12,7 @@ from grid.inputs import (
     agent_config_for,
     load_grid,
     run_mcp_config,
+    scratchpad_enabled,
     verifiers_for,
 )
 from grid.scheduler import grid_order
@@ -145,6 +146,40 @@ def test_overlay_and_snapshot_zip(tmp_path):
         tar.add(overlay / "filesystem" / "in" / "b.txt", arcname="filesystem/in/b.txt")
     with zipfile.ZipFile(tar_gz_to_zip(snapshot, tmp_path / "snap.zip")) as zf:
         assert zf.read("filesystem/in/b.txt") == b"b"
+
+
+def test_scratchpad_on_by_default_and_in_the_prompt(grid_dir):
+    grid = load_grid(grid_dir / "grid.json")
+    assert grid.agent_config["agent_config_values"]["scratchpad"] is True
+    assert "scratchpad_write" in grid.system_prompt
+
+
+def test_scratchpad_off_leaves_the_prompt_alone(grid_dir):
+    _write(
+        grid_dir / "agent_config.json",
+        {"agent_config_id": "react_toolbelt_agent", "agent_config_values": {}},
+    )
+    config = json.loads((grid_dir / "grid.json").read_text())
+    _write(grid_dir / "grid.json", {**config, "agent_config": "agent_config.json"})
+    grid = load_grid(grid_dir / "grid.json")
+    assert "scratchpad" not in grid.system_prompt
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (True, True),
+        ("true", True),
+        (1, True),
+        (False, False),
+        ("no", False),
+        (None, False),
+    ],
+)
+def test_scratchpad_enabled(value, expected):
+    assert (
+        scratchpad_enabled({"agent_config_values": {"scratchpad": value}}) is expected
+    )
 
 
 def _with_human(grid_dir, human, personas=None):

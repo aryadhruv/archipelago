@@ -201,6 +201,18 @@ def final_answer(trajectory: dict[str, Any] | None) -> str | None:
     return None
 
 
+def scratchpad(trajectory: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+    """The agent's append-only notes, or None when the run had no scratchpad."""
+    notes = ((trajectory or {}).get("output") or {}).get("scratchpad")
+    if not isinstance(notes, list):
+        return None
+    return [
+        {"index": n.get("index"), "step": n.get("step"), "note": n.get("note")}
+        for n in notes
+        if isinstance(n, dict)
+    ]
+
+
 def run_view(grid: Grid, store: Store, run_id: str) -> dict[str, Any]:
     run = store.run(run_id)
     directory = Path(run.attempt_dir) if run.attempt_dir else None
@@ -242,6 +254,7 @@ def run_view(grid: Grid, store: Store, run_id: str) -> dict[str, Any]:
         ],
         "usage": {"call_log": usage.get("call_log") or []},
         "final_answer": final_answer(trajectory),
+        "scratchpad": scratchpad(trajectory),
         "grades": None
         if grades is None
         else {

@@ -116,6 +116,16 @@ export function render(root, route) {
     const answerCard = h('section', { class: 'card' }, h('div', { class: 'panel-head' }, h('h2', null, 'Final answer')),
       run.final_answer ? h('div', { class: 'answer' }, run.final_answer) : emptyState('No final answer', grp === 'gave_up' ? 'The agent never called final_answer.' : 'Not submitted yet.', 'doc'));
 
+    // ---------- scratchpad (append-only notes; shown only when the run had one) ----------
+    const notes = run.scratchpad;
+    const scratchCard = Array.isArray(notes) ? h('section', { class: 'card' },
+      h('div', { class: 'panel-head' }, h('h2', null, 'Scratchpad'),
+        h('span', { class: 'right panel-note num' }, `${notes.length} note${notes.length === 1 ? '' : 's'} · append-only`)),
+      notes.length ? notes.map((n) => h('div', { class: 'note' },
+        h('span', { class: 'note-step num' }, `step ${n.step}`),
+        h('div', { class: 'answer' }, n.note)))
+        : emptyState('No notes', 'The agent never wrote to its scratchpad.', 'doc')) : null;
+
     // ---------- grading ----------
     const grades = run.grades;
     const crit = grades && grades.criteria ? grades.criteria : [];
@@ -150,7 +160,7 @@ export function render(root, route) {
         h('section', { class: 'card' },
           h('div', { class: 'panel-head' }, h('h2', null, 'Timeline'), h('span', { class: 'panel-note' }, `${events.length} events`),
             h('div', { class: 'right' }, expandBtn, collapseBtn)), tl),
-        h('div', { style: { display: 'grid', gap: '16px', minWidth: 0 } }, tokenCard, answerCard, gradeCard, attemptCard)));
+        h('div', { style: { display: 'grid', gap: '16px', minWidth: 0 } }, tokenCard, answerCard, scratchCard, gradeCard, attemptCard)));
   }
 
   load();

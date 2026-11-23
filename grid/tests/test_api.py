@@ -132,6 +132,18 @@ def test_world_files_and_smoke_status(setup):
     assert smoke["task_id"] == "t1"
 
 
+def test_scratchpad_from_the_trajectory_output():
+    from grid.views import scratchpad
+
+    notes = [{"index": 0, "step": 2, "elapsed_sec": 1.0, "note": "n", "hash": "h"}]
+    assert scratchpad({"output": {"scratchpad": notes}}) == [
+        {"index": 0, "step": 2, "note": "n"}
+    ]
+    assert scratchpad({"output": {"scratchpad": []}}) == []
+    assert scratchpad({"output": None}) is None
+    assert scratchpad(None) is None
+
+
 def test_final_answer_from_the_tool_message():
     from grid.views import final_answer
 

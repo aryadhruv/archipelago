@@ -57,6 +57,16 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      files by mail as needed.
    - Grading: the judge sees what was attached to mail the agent sent.
 
+5. **Scratchpad follow-ups.** The append-only scratchpad is in
+   `react_toolbelt_agent` (see `fork-changes.md`).
+   - Show notes written per model, and the share of runs that used the
+     scratchpad, on the leaderboard.
+   - Optionally, an LLM monitor that reads the notes alongside the run's tool
+     calls and flags shortcuts or gaming. Keep it out of the task score: once
+     notes are scored, models learn to write notes that score well.
+   - The hash chain shows edits or dropped entries, but not truncation at the
+     end. To catch that, put the last hash in the agent log.
+
 ### Small fixes
 
 - Optional: bind the environment port to `127.0.0.1` in

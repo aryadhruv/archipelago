@@ -25,6 +25,12 @@ For large tool catalogs (100+ tools), sending all tools to the LLM wastes contex
 
 **Important**: All todos must be marked as `completed` or `cancelled` before `final_answer` will be accepted.
 
+**Scratchpad** (config `scratchpad`, off by default):
+- `scratchpad_write` - Append a note (`note`, up to 8000 characters). Append-only: there is no tool to edit or delete a note.
+- `scratchpad_read` - Return notes oldest first (`last_n` for only the most recent).
+
+Notes are kept in the agent process, out of reach of the sandbox's file and code tools, and saved in the trajectory as `output.scratchpad`: one entry per note with `index`, `step`, `elapsed_sec`, `note`, `prev_hash` and `hash` (SHA-256 chained to the entry before, checked by `scratchpad.verify_chain`). They survive ReSum summarization, since `scratchpad_read` returns them word for word.
+
 **Final answer:**
 - `final_answer` - Create a final answer. This ends the trajectory.
 

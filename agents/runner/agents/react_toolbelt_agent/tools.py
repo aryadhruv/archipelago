@@ -250,10 +250,13 @@ class MetaToolHandler:
         all_tools: dict[str, ChatCompletionToolParam],
         toolbelt: set[str],
         max_toolbelt_size: int,
+        always_available: set[str] | None = None,
     ):
         self.all_tools = all_tools
         self.toolbelt = toolbelt
         self.max_toolbelt_size = max_toolbelt_size
+        # Harness tools offered every turn (meta-tools, plus e.g. the scratchpad).
+        self.always_available = META_TOOL_NAMES | (always_available or set())
         self.todos: dict[str, TodoItem] = {}
 
     def handle(self, tool_name: str, arguments: str) -> str:
@@ -280,7 +283,7 @@ class MetaToolHandler:
             name = args.get("tool_name", "")
             if not name:
                 return json.dumps({"error": "tool_name is required"})
-            if name in META_TOOL_NAMES:
+            if name in self.always_available:
                 return json.dumps({"error": _always_available(name)})
             if name not in self.all_tools:
                 return json.dumps({"error": f"Tool '{name}' not found"})
@@ -389,7 +392,7 @@ class MetaToolHandler:
         name = args.get("tool_name", "")
         if not name:
             return json.dumps({"error": "tool_name is required"})
-        if name in META_TOOL_NAMES:
+        if name in self.always_available:
             return json.dumps({"error": _always_available(name)})
         if name not in self.all_tools:
             return json.dumps({"error": f"Tool '{name}' not found"})

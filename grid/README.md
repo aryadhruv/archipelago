@@ -65,8 +65,8 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `max_attempts` | 3 | Per run, counted separately for the agent and for grading |
 | `port_base` | 8100 | Ports are taken from here up, skipping busy ones |
 | `judge` | required | `{"model": ..., "extra_args": ...}` |
-| `agent_config` | `defaults/agent_config.json` | react_toolbelt_agent, 50 steps, 1 h wall clock |
-| `system_prompt` | `defaults/system_prompt.md` | The prompt from the examples |
+| `agent_config` | `defaults/agent_config.json` | react_toolbelt_agent, 50 steps, 1 h wall clock, append-only scratchpad on (`"scratchpad": false` turns it off) |
+| `system_prompt` | `defaults/system_prompt.md` | The prompt from the examples, plus `defaults/scratchpad_prompt.md` when the scratchpad is on |
 | `mcp_config` | `defaults/mcp_config.json` | All nine servers, each with its own venv Python over stdio |
 | `eval_configs`, `scoring_config` | `defaults/` | `output_llm` criteria, plain average |
 | `env_image` | built from the checked-out `environment/` and `mcp_servers/` | Pin an existing image |

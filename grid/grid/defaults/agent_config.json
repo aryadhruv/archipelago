@@ -3,6 +3,7 @@
   "agent_name": "React Toolbelt Agent",
   "agent_config_values": {
     "max_steps": 50,
-    "wall_clock_timeout_sec": 3600
+    "wall_clock_timeout_sec": 3600,
+    "scratchpad": true
   }
 }

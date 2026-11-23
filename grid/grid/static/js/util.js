@@ -185,7 +185,7 @@ export const gridServers = (grid) => SERVERS.filter((sv) => sv.id !== 'human_ser
 /** An ask_human call: the agent asking the simulated human. */
 export const isAskHuman = (e) => e.server === 'human_server' && shortTool(e.tool, e.server) === 'ask_human';
 export const TOOLBELT_TOOLS = ['todo_write', 'toolbelt_list_tools', 'toolbelt_inspect_tool',
-  'toolbelt_add_tool', 'toolbelt_remove_tool', 'final_answer'];
+  'toolbelt_add_tool', 'toolbelt_remove_tool', 'scratchpad_write', 'scratchpad_read', 'final_answer'];
 /** Short tool name without the `{server}_` prefix. */
 export function shortTool(tool, server) {
   if (!tool) return '';

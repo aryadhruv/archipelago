@@ -105,6 +105,20 @@ what we removed.
   never enter the container. Grid containers map `host.docker.internal` to
   `host-gateway`, and `.apps_data/human/` is left out of populate. See
   `grid/README.md`.
+- **Append-only scratchpad** (`react_toolbelt_agent`, config `scratchpad`,
+  default off; on in the grid's default agent config). Adds two
+  always-available tools: `scratchpad_write(note)` appends a note of up to
+  8000 characters, and `scratchpad_read(last_n?)` returns notes oldest first.
+  Nothing can edit or delete a note. The notes live in the agent process,
+  outside the sandbox, so filesystem and code tools can't reach them. Each
+  entry stores its step, elapsed time and a SHA-256 chained to the entry
+  before it (`scratchpad.verify_chain`), and the list is saved in the
+  trajectory as `output.scratchpad`. Notes survive context compaction, since
+  `scratchpad_read` returns them word for word. The grader doesn't see them:
+  `output_llm` reads the final answer and the world's file changes, not the
+  messages. When the scratchpad is on, the grid adds
+  `defaults/scratchpad_prompt.md` to the system prompt (the same wording for
+  every model), and Run Detail shows the notes.
 
 ## Fixed
 
