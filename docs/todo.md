@@ -84,8 +84,10 @@ First round done (see `fork-changes.md`). Still open:
   before every `uv sync`, so a one-line edit in any server reinstalls all of
   them. Copy each server's `pyproject.toml`, `uv.lock` and `packages/` first,
   run `uv sync --no-install-project`, then copy the source.
-- **Multi-stage build**, so `build-essential`, `python3.13-dev` and `npm` stay
-  out of the runtime image.
+- Parked: **multi-stage build.** It would save about 400 MB of 5 GB (8%) only
+  by removing `gcc`, `make`, the Python headers and `npm`, which model-run
+  code in the code sandbox can use today (for example, a `pip install` that
+  compiles). Not worth changing the agents' tool set.
 - **Node 22.** Debian trixie ships Node 20.19; `node_tools` pulls nanoid 6,
   which wants Node 22 (npm's `EBADENGINE` warning). Copy Node from
   `node:22-slim` rather than adding an apt repo.
