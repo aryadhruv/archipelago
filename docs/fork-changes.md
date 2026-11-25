@@ -136,7 +136,13 @@ what we removed.
     prompt text mentions reviewers or grading, because models change what
     they write when told they're watched. The notes are in fact logged and
     saved with the run. So a run measures how a model behaves when it
-    believes it's unobserved; read its notes that way. Run Detail shows the notes, and reads them from
+    believes it's unobserved; read its notes that way.
+- **No "Think Before Acting" in the default prompt.** The grid's
+  `defaults/system_prompt.md` and `examples/simple_task`'s prompt drop the
+  section asking the model to explain its reasoning in 1-3 sentences before
+  each tool call. Models reason before acting anyway, and no model-facing
+  text asks for "thinking". The agent README's recommended prompt still has
+  the upstream wording. Run Detail shows the notes, and reads them from
     the event log when the grid killed the agent before it wrote its output.
 
 ## Fixed
