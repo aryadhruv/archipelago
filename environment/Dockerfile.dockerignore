@@ -1,0 +1,18 @@
+# Context is the repo root; only environment/ and mcp_servers/ are used.
+*
+!environment
+!mcp_servers
+
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.ruff_cache
+**/.pytest_cache
+**/.mypy_cache
+**/node_modules
+**/*.egg-info
+mcp_servers/*/packages/*/build
+**/.env
+**/.env.*
+**/.DS_Store
+**/*.log

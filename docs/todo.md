@@ -76,7 +76,41 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      compaction, and the mutable plan already exists as `todo_write`. Revisit
      only if runs show stale notes pulling agents off task after compaction.
 
+### Environment image
+
+First round done (see `fork-changes.md`). Still open:
+
+- **Cache each server's dependencies separately.** `COPY mcp_servers/` comes
+  before every `uv sync`, so a one-line edit in any server reinstalls all of
+  them. Copy each server's `pyproject.toml`, `uv.lock` and `packages/` first,
+  run `uv sync --no-install-project`, then copy the source.
+- Parked: **multi-stage build.** It would save about 400 MB of 5 GB (8%) only
+  by removing `gcc`, `make`, the Python headers and `npm`, which model-run
+  code in the code sandbox can use today (for example, a `pip install` that
+  compiles). Not worth changing the agents' tool set.
+- **Node 22.** Debian trixie ships Node 20.19; `node_tools` pulls nanoid 6,
+  which wants Node 22 (npm's `EBADENGINE` warning). Copy Node from
+  `node:22-slim` rather than adding an apt repo.
+- **Non-root server user.** Everything runs as root. Add a user and an option
+  to run the MCP servers as it. Files under `/filesystem` must keep one owner:
+  mixing root and non-root writers breaks the agent's writes.
+
+### Gateway and server runtime
+
+- **stdio servers restart on every request.** The gateway restarts each
+  stdio server per request, about 6 s per tool call. Likely the biggest cost in
+  a run, and it skews timing comparisons.
+- **`POST /apps` mid-run kills live sessions.** The call in flight hangs
+  until its 120 s timeout instead of failing with a clear error.
+- **Path checks order** (`mcp_actor/paths.py`, `_dealias_root_prefix` in the
+  vendored `mercor-mcp-shared`). It stats the raw path before the containment
+  check, so paths outside the root return different errors depending on
+  whether they exist.
+
 ### Small fixes
+
+- **Mail `list` fails output validation** (`None is not of type 'object'`),
+  on images both before and after the build cleanup.
 
 - Optional: bind the environment port to `127.0.0.1` in
   `environment/docker-compose.yml`, so the sandbox isn't reachable from the
