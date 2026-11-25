@@ -12,6 +12,7 @@ from grid.inputs import (
     agent_config_for,
     load_grid,
     run_mcp_config,
+    scratchpad_enabled,
     verifiers_for,
 )
 from grid.scheduler import grid_order
@@ -145,6 +146,60 @@ def test_overlay_and_snapshot_zip(tmp_path):
         tar.add(overlay / "filesystem" / "in" / "b.txt", arcname="filesystem/in/b.txt")
     with zipfile.ZipFile(tar_gz_to_zip(snapshot, tmp_path / "snap.zip")) as zf:
         assert zf.read("filesystem/in/b.txt") == b"b"
+
+
+def test_scratchpad_on_by_default_and_in_the_prompt(grid_dir):
+    grid = load_grid(grid_dir / "grid.json")
+    assert grid.agent_config["agent_config_values"]["scratchpad"] is True
+    assert "scratchpad_write" in grid.system_prompt
+    # Models reason before acting anyway; no prompt text asks for "thinking".
+    assert "think" not in grid.system_prompt.lower()
+    paragraph = grid.system_prompt.split("## Scratchpad", 1)[1].lower()
+    assert "private" in paragraph
+    for word in ("think", "review", "graded", "visible"):
+        assert word not in paragraph
+
+
+def test_scratchpad_off_leaves_the_prompt_alone(grid_dir):
+    _write(
+        grid_dir / "agent_config.json",
+        {"agent_config_id": "react_toolbelt_agent", "agent_config_values": {}},
+    )
+    config = json.loads((grid_dir / "grid.json").read_text())
+    _write(grid_dir / "grid.json", {**config, "agent_config": "agent_config.json"})
+    grid = load_grid(grid_dir / "grid.json")
+    assert "scratchpad" not in grid.system_prompt
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (True, True),
+        ("true", True),
+        (" TRUE ", True),
+        # The agent's _coerce_bool reads all of these as off; the grid must too.
+        (1, False),
+        ("1", False),
+        (1.0, False),
+        (False, False),
+        ("no", False),
+        (None, False),
+    ],
+)
+def test_scratchpad_enabled_matches_the_agent(value, expected):
+    config = {
+        "agent_config_id": "react_toolbelt_agent",
+        "agent_config_values": {"scratchpad": value},
+    }
+    assert scratchpad_enabled(config) is expected
+
+
+def test_scratchpad_only_for_the_toolbelt_agent():
+    config = {
+        "agent_config_id": "loop_agent",
+        "agent_config_values": {"scratchpad": True},
+    }
+    assert scratchpad_enabled(config) is False
 
 
 def _with_human(grid_dir, human, personas=None):

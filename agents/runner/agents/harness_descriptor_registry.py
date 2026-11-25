@@ -797,6 +797,18 @@ DESCRIPTOR_CATALOG = TypeAdapter(
                 "default_value": True,
             },
         ),
+        "scratchpad": DescriptorDefinition(
+            label="Scratchpad",
+            group="Knob",
+            is_core=False,
+            value_type="boolean",
+            meaning="Gives the model an append-only scratchpad for notes, saved with the trajectory.",
+            field_schema={
+                "field_type": "boolean",
+                "description": "On: the model gets scratchpad_write and scratchpad_read. Notes can't be edited or deleted, live outside the sandbox, and are saved in the trajectory output under 'scratchpad'. Off (default): no scratchpad tools.",
+                "default_value": False,
+            },
+        ),
         "use_mcp_cli": DescriptorDefinition(
             label="Use MCP command-line transport",
             group="Knob",
@@ -1110,6 +1122,7 @@ HARNESS_PARAMETERS: dict[str, dict[str, ParameterOverride]] = {
         ),
         "attachments_staged_to_sandbox": ParameterOverride(),
         "use_toolbelt": ParameterOverride(runtime_default=True, on_missing="default"),
+        "scratchpad": ParameterOverride(runtime_default=False, on_missing="default"),
         "max_consecutive_truncations": ParameterOverride(
             runtime_default=0, on_missing="default"
         ),

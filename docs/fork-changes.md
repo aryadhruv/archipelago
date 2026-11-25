@@ -105,6 +105,45 @@ what we removed.
   never enter the container. Grid containers map `host.docker.internal` to
   `host-gateway`, and `.apps_data/human/` is left out of populate. See
   `grid/README.md`.
+- **Append-only scratchpad** (`react_toolbelt_agent`, config `scratchpad`,
+  default off; on in the grid's default agent config). Two always-available
+  tools: `scratchpad_write(note)` appends a note of up to 8000 characters, and
+  `scratchpad_read(last_n?)` returns notes oldest first (the newest that fit
+  in 40,000 characters, saying how many were left out). Their descriptions ask
+  the model to log its plan first and then a note after each step.
+  - Append-only by design: there is no tool to edit or delete a note, and the
+    notes live in the agent process, outside the sandbox, so filesystem and
+    code tools can't reach them.
+  - Each entry records its step and elapsed time, plus a SHA-256 over its
+    content and the previous entry's hash (`scratchpad.verify_chain`). The
+    chain is a checksum, not a seal: whoever can edit the trajectory can
+    recompute it. Each entry is also written to `agent_events.jsonl`
+    (`message_type` `scratchpad_entry`) as it is made, and that log is the
+    record to check the trajectory against.
+  - Saved in the trajectory as `output.scratchpad`. Notes survive context
+    compaction, since `scratchpad_read` returns them word for word. Scratchpad
+    calls in the same batch as `final_answer` are handled first, so they are
+    never dropped or left without a tool result.
+  - The judge doesn't see the notes. `output_llm` reads the final answer, the
+    world's file changes and the user and assistant text of the messages;
+    notes are in tool calls and tool results, which it leaves out. A model
+    that repeats its notes in plain text exposes them, as with any text reply.
+  - Grid: when the agent config turns the scratchpad on (`true` or `"true"`,
+    parsed as the agent parses it, and only for `react_toolbelt_agent`), the
+    grid adds `defaults/scratchpad_prompt.md` to the system prompt, the same
+    wording for every model.
+  - The model is told the scratchpad is private, and nothing in the tool or
+    prompt text mentions reviewers or grading, because models change what
+    they write when told they're watched. The notes are in fact logged and
+    saved with the run. So a run measures how a model behaves when it
+    believes it's unobserved; read its notes that way.
+- **No "Think Before Acting" in the default prompt.** The grid's
+  `defaults/system_prompt.md` and `examples/simple_task`'s prompt drop the
+  section asking the model to explain its reasoning in 1-3 sentences before
+  each tool call. Models reason before acting anyway, and no model-facing
+  text asks for "thinking". The agent README's recommended prompt still has
+  the upstream wording. Run Detail shows the notes, and reads them from
+    the event log when the grid killed the agent before it wrote its output.
 
 ## Fixed
 

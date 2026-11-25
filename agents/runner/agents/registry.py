@@ -468,6 +468,17 @@ _REACT_TOOLBELT_CONFIG_FIELDS = [
         default_value=True,
     ),
     TaskFieldSchema(
+        field_id="scratchpad",
+        field_type=TaskFieldType.BOOLEAN,
+        label="Scratchpad",
+        description=(
+            "On: the model gets scratchpad_write and scratchpad_read, an "
+            "append-only notes log kept outside the sandbox and saved in the "
+            "trajectory output. Off (default): no scratchpad tools."
+        ),
+        default_value=False,
+    ),
+    TaskFieldSchema(
         field_id="max_consecutive_truncations",
         field_type=TaskFieldType.NUMBER,
         label="Max Consecutive Truncated Replies",

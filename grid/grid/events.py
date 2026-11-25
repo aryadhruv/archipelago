@@ -26,6 +26,8 @@ META_TOOLS = {
     "toolbelt_inspect_tool",
     "toolbelt_add_tool",
     "toolbelt_remove_tool",
+    "scratchpad_write",
+    "scratchpad_read",
     "final_answer",
 }
 PATH_KEYS = ("path", "file_path", "filepath", "file", "directory", "dir", "filename")

@@ -274,6 +274,10 @@ def load_grid(config_path: Path) -> Grid:
         pass_score=float(cfg.get("pass_score", 1.0)),
     )
     grid.world_ids = sorted({t.world_id for t in tasks})
+    if scratchpad_enabled(agent_config):
+        # Same wording for every model; the tools themselves are added by the agent.
+        scratchpad_prompt = (DEFAULTS_DIR / "scratchpad_prompt.md").read_text().strip()
+        grid.system_prompt = f"{grid.system_prompt}\n\n{scratchpad_prompt}"
     grid.human = _load_human(cfg.get("human"))
     if grid.human is not None:
         grid.personas = _load_personas(inputs_dir)
@@ -290,6 +294,20 @@ def load_grid(config_path: Path) -> Grid:
     if grid.repeats < 1 or grid.max_parallel < 1 or grid.max_attempts < 1:
         raise InputError("repeats, max_parallel and max_attempts must be at least 1")
     return grid
+
+
+def scratchpad_enabled(agent_config: dict[str, Any]) -> bool:
+    """Whether the agent config turns on react_toolbelt_agent's scratchpad.
+
+    Must agree with the agent's own parsing (``_coerce_bool`` with default
+    off: only true or "true"), or the prompt would promise tools the agent
+    never offers. Other harnesses have no scratchpad."""
+    if agent_config.get("agent_config_id") != "react_toolbelt_agent":
+        return False
+    value = (agent_config.get("agent_config_values") or {}).get("scratchpad")
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return value is True
 
 
 def agent_config_for(grid: Grid, model: Model) -> dict[str, Any]:

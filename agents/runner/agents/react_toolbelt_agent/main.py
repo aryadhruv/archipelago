@@ -58,6 +58,7 @@ from runner.utils.settings import get_settings
 from runner.utils.usage import UsageTracker
 
 from .resum import ReSumManager
+from .scratchpad import SCRATCHPAD_TOOL_NAMES, SCRATCHPAD_TOOLS, Scratchpad
 from .tool_result import truncate_tool_messages
 from .tools import (
     FINAL_ANSWER_TOOL,
@@ -143,6 +144,13 @@ class ReActAgent:
         self._mcp_gateway_auth_token: str | None = run_input.mcp_gateway_auth_token
         self.max_toolbelt_size: int = 80
         self.use_toolbelt: bool = _coerce_bool(config.get("use_toolbelt"), default=True)
+        # Append-only notes kept in this process, out of the sandbox's reach.
+        self.scratchpad: Scratchpad | None = (
+            Scratchpad()
+            if _coerce_bool(config.get("scratchpad"), default=False)
+            else None
+        )
+        self._step_number: int = 0
         # Off by default: 29% of completed Julius Gemini runs had 3+ cut-offs in a row.
         self.max_consecutive_truncations: int = int(
             cast(int | float | str, config.get("max_consecutive_truncations") or 0)
@@ -204,7 +212,21 @@ class ReActAgent:
         """Get tools for LLM: meta-tools + toolbelt + final_answer."""
         toolbelt_tools = [self.all_tools[name] for name in self.toolbelt]
         meta_tools = META_TOOLS if self.use_toolbelt else [TODO_WRITE_TOOL]
-        return list(meta_tools) + toolbelt_tools + [FINAL_ANSWER_TOOL]
+        scratchpad_tools = SCRATCHPAD_TOOLS if self.scratchpad else []
+        if scratchpad_tools:
+            # The local scratchpad shadows an MCP tool of the same name;
+            # sending both would repeat the name, which providers reject.
+            toolbelt_tools = [
+                t
+                for t in toolbelt_tools
+                if t.get("function", {}).get("name") not in SCRATCHPAD_TOOL_NAMES
+            ]
+        return (
+            list(meta_tools)
+            + list(scratchpad_tools)
+            + toolbelt_tools
+            + [FINAL_ANSWER_TOOL]
+        )
 
     async def _initialize_tools(self, client: Any) -> None:
         """Load tools from MCP gateway."""
@@ -222,7 +244,10 @@ class ReActAgent:
             self.toolbelt.update(self.all_tools)
 
         self.meta_tool_handler = MetaToolHandler(
-            self.all_tools, self.toolbelt, self.max_toolbelt_size
+            self.all_tools,
+            self.toolbelt,
+            self.max_toolbelt_size,
+            always_available=SCRATCHPAD_TOOL_NAMES if self.scratchpad else None,
         )
 
         mode = "toolbelt starts empty" if self.use_toolbelt else "toolbelt off"
@@ -439,12 +464,79 @@ class ReActAgent:
         for uri in image_uris:
             self._usage_tracker.track_tool_output_image(uri)
 
+    def _handle_scratchpad_call(self, tool_call: Any) -> None:
+        """Append-only notes, handled locally and kept outside the sandbox."""
+        assert self.scratchpad
+        name = tool_call.function.name
+        logger.bind(
+            message_type="tool_call",
+            ref=tool_call.id,
+            name=name,
+            payload=tool_call.function.arguments,
+        ).info(f"Scratchpad: {name}")
+        result = self.scratchpad.handle(
+            name, tool_call.function.arguments, self._step_number
+        )
+        logger.bind(
+            message_type="tool_result",
+            ref=tool_call.id,
+            name=name,
+            payload=result,
+        ).info(f"Scratchpad {name} completed")
+        self.messages.append(
+            LitellmOutputMessage(
+                role="tool",
+                tool_call_id=tool_call.id,
+                name=name,
+                content=result,
+            )
+        )
+
     async def _handle_tool_calls(self, client: Any, tool_calls: list[Any]) -> None:
+        """Process tool calls, then put their results back in call order.
+
+        Local tools (scratchpad, meta-tools) answer inline while MCP results
+        are appended after the loop, so without this a batch like
+        [mcp_read, todo_write] would come back as [todo_write, mcp_read].
+        Some providers pair function responses with calls by position."""
+        start = len(self.messages)
+        try:
+            await self._dispatch_tool_calls(client, tool_calls)
+        finally:
+            self._restore_call_order(start, tool_calls)
+
+    def _restore_call_order(self, start: int, tool_calls: list[Any]) -> None:
+        """Stable-sort this batch's tool results by call position.
+
+        Anything else appended (deferred image messages) stays after them."""
+        order = {tc.id: i for i, tc in enumerate(tool_calls)}
+        last = len(tool_calls)
+
+        def key(msg: Any) -> int:
+            if get_msg_attr(msg, "role") != "tool":
+                return last
+            return order.get(get_msg_attr(msg, "tool_call_id"), last)
+
+        self.messages[start:] = sorted(self.messages[start:], key=key)
+
+    async def _dispatch_tool_calls(self, client: Any, tool_calls: list[Any]) -> None:
         """Process tool calls."""
         mcp_tool_calls: list[Any] = []
 
+        # Scratchpad calls go first: they only touch local state, and the
+        # final_answer branch below returns early, which would otherwise drop
+        # notes written in the same batch (or leave their calls unanswered).
+        scratchpad_ids: set[str] = set()
+        if self.scratchpad:
+            for tool_call in tool_calls:
+                if tool_call.function.name in SCRATCHPAD_TOOL_NAMES:
+                    self._handle_scratchpad_call(tool_call)
+                    scratchpad_ids.add(tool_call.id)
+
         for tool_call in tool_calls:
             name = tool_call.function.name
+            if tool_call.id in scratchpad_ids:
+                continue
 
             # Final answer - validate todos, then handle and return
             if name == "final_answer":
@@ -758,8 +850,13 @@ class ReActAgent:
             time_elapsed=time.time() - self.start_time if self.start_time else 0,
             usage=self._usage_tracker.to_dict(),
         )
+        extra: dict[str, Any] = {}
         if records:
-            output.output = {"compactions": records}
+            extra["compactions"] = records
+        if self.scratchpad is not None:
+            extra["scratchpad"] = self.scratchpad.to_output()
+        if extra:
+            output.output = extra
         return output
 
     async def run(self) -> AgentTrajectoryOutput:
@@ -771,6 +868,8 @@ class ReActAgent:
                     logger.info(f"Starting ReAct Toolbelt agent with {self.model}")
                     await self._initialize_tools(client)
                     self.start_time = time.time()
+                    if self.scratchpad:
+                        self.scratchpad.set_start_time(self.start_time)
                     if self.stage_files_to_env:
                         try:
                             self.messages = await stage_message_files(
@@ -796,6 +895,7 @@ class ReActAgent:
                             break
                         if self._truncation_limit_reached():
                             break
+                        self._step_number = step + 1
                         logger.bind(message_type="step").info(
                             f"Starting step {step + 1}"
                         )

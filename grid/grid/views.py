@@ -201,6 +201,42 @@ def final_answer(trajectory: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _logged_notes(events_path: Path | None) -> list[dict[str, Any]] | None:
+    """Scratchpad entries from the agent's event log, written as the run went."""
+    if events_path is None or not events_path.is_file():
+        return None
+    notes = []
+    for line in events_path.read_text(errors="replace").splitlines():
+        try:
+            extra = json.loads(line).get("extra") or {}
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        if extra.get("message_type") == "scratchpad_entry" and isinstance(
+            extra.get("payload"), dict
+        ):
+            notes.append(extra["payload"])
+    return notes or None
+
+
+def scratchpad(
+    trajectory: dict[str, Any] | None, events_path: Path | None = None
+) -> list[dict[str, Any]] | None:
+    """The agent's append-only notes, or None when the run had no scratchpad.
+
+    Falls back to the event log when the trajectory has none, e.g. when the
+    grid killed the agent before it wrote its output."""
+    notes = ((trajectory or {}).get("output") or {}).get("scratchpad")
+    if not isinstance(notes, list):
+        notes = _logged_notes(events_path)
+    if notes is None:
+        return None
+    return [
+        {"index": n.get("index"), "step": n.get("step"), "note": n.get("note")}
+        for n in notes
+        if isinstance(n, dict)
+    ]
+
+
 def run_view(grid: Grid, store: Store, run_id: str) -> dict[str, Any]:
     run = store.run(run_id)
     directory = Path(run.attempt_dir) if run.attempt_dir else None
@@ -242,6 +278,9 @@ def run_view(grid: Grid, store: Store, run_id: str) -> dict[str, Any]:
         ],
         "usage": {"call_log": usage.get("call_log") or []},
         "final_answer": final_answer(trajectory),
+        "scratchpad": scratchpad(
+            trajectory, directory / "agent_events.jsonl" if directory else None
+        ),
         "grades": None
         if grades is None
         else {

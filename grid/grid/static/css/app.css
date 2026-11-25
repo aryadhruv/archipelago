@@ -452,6 +452,9 @@ svg.map { display: block; width: 100%; height: auto; max-height: calc(100vh - 25
 .answer { white-space: pre-wrap; font-size: var(--fs-m); color: var(--text); line-height: 1.55; }
 .crit { display: grid; grid-template-columns: 24px 1fr auto; gap: var(--sp-2); padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); align-items: start; }
 .crit:last-child { border-bottom: 0; }
+.note { display: grid; grid-template-columns: 64px 1fr; gap: var(--sp-2); padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); align-items: start; }
+.note:last-child { border-bottom: 0; }
+.note-step { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-muted); padding-top: 2px; }
 .crit .why { color: var(--text-muted); font-size: var(--fs-s); grid-column: 2 / 4; }
 .crit .vid { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-muted); }
 

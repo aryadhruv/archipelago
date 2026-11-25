@@ -57,6 +57,25 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      files by mail as needed.
    - Grading: the judge sees what was attached to mail the agent sent.
 
+5. **Scratchpad follow-ups.** The append-only scratchpad is in
+   `react_toolbelt_agent` (see `fork-changes.md`).
+   - Show notes written per model, and the share of runs that used the
+     scratchpad, on the leaderboard.
+   - Check each finished run's `output.scratchpad` against the
+     `scratchpad_entry` records in its `agent_events.jsonl`, and flag runs
+     where they differ.
+   - Optionally, an LLM monitor that reads the notes alongside the run's tool
+     calls and flags shortcuts or gaming. Keep it out of the task score: once
+     notes are scored, models learn to write notes that score well.
+   - Check whether models use it: in the first smoke runs (free models, one
+     easy task) none called the scratchpad tools.
+   - Parked: soft revise/retract. `scratchpad_revise(index, note, reason)`
+     and `scratchpad_retract(index, reason)` would give the agent a clean
+     current view while the append-only log keeps every operation. Little
+     gain for now: earlier writes stay in the agent's own history until
+     compaction, and the mutable plan already exists as `todo_write`. Revisit
+     only if runs show stale notes pulling agents off task after compaction.
+
 ### Small fixes
 
 - Optional: bind the environment port to `127.0.0.1` in

@@ -32,6 +32,7 @@ def test_split_tool():
     )
     assert split_tool("toolbelt_add_tool", SERVERS) == ("toolbelt", "toolbelt_add_tool")
     assert split_tool("final_answer", SERVERS) == ("toolbelt", "final_answer")
+    assert split_tool("scratchpad_write", SERVERS) == ("toolbelt", "scratchpad_write")
     assert split_tool("mystery", SERVERS) == (None, "mystery")
 
 
