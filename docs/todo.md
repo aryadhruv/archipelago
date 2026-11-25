@@ -69,6 +69,12 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
      notes are scored, models learn to write notes that score well.
    - Check whether models use it: in the first smoke runs (free models, one
      easy task) none called the scratchpad tools.
+   - Parked: soft revise/retract. `scratchpad_revise(index, note, reason)`
+     and `scratchpad_retract(index, reason)` would give the agent a clean
+     current view while the append-only log keeps every operation. Little
+     gain for now: earlier writes stay in the agent's own history until
+     compaction, and the mutable plan already exists as `todo_write`. Revisit
+     only if runs show stale notes pulling agents off task after compaction.
 
 ### Small fixes
 
