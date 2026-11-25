@@ -1,4 +1,9 @@
 import asyncio
+import contextlib
+import os
+import signal
+import subprocess
+import time
 
 import httpx
 import pytest
@@ -89,7 +94,7 @@ def test_round_trip_warnings(result, detail):
 def test_round_trip_probe_output_parsed(monkeypatch):
     from grid.inputs import Model
 
-    async def fake_run_cmd(*args, cwd=None, env=None):
+    async def fake_run_cmd(*args, cwd=None, env=None, own_group=False):
         assert args[-2] == preflight._ROUND_TRIP
         return 0, 'log noise\nROUND_TRIP [{"id": "m", "status": "ok"}]\n'
 
@@ -101,7 +106,7 @@ def test_round_trip_probe_output_parsed(monkeypatch):
 def test_round_trip_probe_crash_warns(monkeypatch):
     from grid.inputs import Model
 
-    async def fake_run_cmd(*args, cwd=None, env=None):
+    async def fake_run_cmd(*args, cwd=None, env=None, own_group=False):
         return 1, "Traceback...\nImportError: boom"
 
     monkeypatch.setattr(preflight, "run_cmd", fake_run_cmd)
@@ -119,3 +124,34 @@ def test_round_trip_lasting_errors_fail(error):
         [{"id": "a", "status": "error", "error": error}]
     )
     assert check.status == "fail"
+
+
+def test_cancelled_command_kills_its_children(tmp_path):
+    from grid.envctl import run_cmd
+
+    pid_file = tmp_path / "pid"
+    script = f"sleep 30 & echo $! > {pid_file}; wait"
+
+    async def go():
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(run_cmd("sh", "-c", script, own_group=True), 1)
+
+    asyncio.run(go())
+    child = int(pid_file.read_text())
+    try:
+        assert not _running(child)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(child, signal.SIGKILL)
+
+
+def _running(pid: int) -> bool:
+    """Alive and not a zombie, waiting briefly for the kill to land."""
+    for _ in range(20):
+        state = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True
+        ).stdout.strip()
+        if not state or state.startswith("Z"):
+            return False
+        time.sleep(0.1)
+    return True

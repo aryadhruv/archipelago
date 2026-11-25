@@ -233,6 +233,7 @@ async def _round_trip_check(grid: Grid) -> Check:
                 _ROUND_TRIP,
                 json.dumps(specs),
                 cwd=AGENTS_DIR,
+                own_group=True,
             ),
             ROUND_TRIP_TIMEOUT_SEC,
         )
