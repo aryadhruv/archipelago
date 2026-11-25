@@ -901,6 +901,13 @@ def read_pdf_pages(
             pages_to_read = list(range(1, total_pages + 1))
         else:
             pages_to_read = [p for p in pages if 1 <= p <= total_pages]
+            # Read the pages that exist, and say which were left out.
+            skipped = [p for p in pages if not 1 <= p <= total_pages]
+            if skipped:
+                errors.append(
+                    f"Skipped page(s) {', '.join(map(str, skipped))}: the document "
+                    f"has {total_pages} page(s)."
+                )
 
         # Open fitz document early for text extraction and strikethrough
         fitz_doc: fitz.Document | None = None

@@ -164,6 +164,9 @@ what we removed.
   error type and field names are still there. Argument validation errors
   print each bad key in full, and a malformed call can make a whole CSV one
   key. Normal results are untouched, and the event log keeps the full error.
+- **Skipped PDF pages are named** (`read_pdf_pages`). Pages past the end
+  were already dropped silently. The result's errors now say which pages
+  were skipped and how many the document has.
 
 ## Fixed
 
