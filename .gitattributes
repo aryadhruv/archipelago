@@ -1,0 +1,19 @@
+# Binary task and world files: never diff, merge or convert line endings.
+*.zip   binary
+*.tar   binary
+*.gz    binary
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.pptx  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+
+# Shell scripts run inside Linux containers, so keep LF even on a Windows checkout.
+*.sh    text eol=lf
+
+# No repo-wide text=auto: some vendored upstream files are committed with CRLF,
+# and normalizing them would conflict with upstream syncs.
