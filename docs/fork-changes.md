@@ -144,6 +144,12 @@ what we removed.
   text asks for "thinking". The agent README's recommended prompt still has
   the upstream wording. Run Detail shows the notes, and reads them from
     the event log when the grid killed the agent before it wrote its output.
+- **"Working on your own" in the default prompt.** The grid's
+  `defaults/system_prompt.md` tells the model that no one replies while it
+  works, that the task's files are in the filesystem, and that a file it is
+  asked for must be created with a tool. Models stopped to ask for
+  confirmation, or pasted a deliverable into chat, and ended the run with
+  nothing saved.
 
 ## Fixed
 
