@@ -506,8 +506,10 @@ class ReActAgent:
         start = len(self.messages)
         try:
             await self._dispatch_tool_calls(client, tool_calls)
-        finally:
+            # Not on an exception: the run is ending, and "Not run because of
+            # final_answer" would be false there.
             self._answer_unanswered(start, tool_calls)
+        finally:
             self._restore_call_order(start, tool_calls)
 
     def _answer_unanswered(self, start: int, tool_calls: list[Any]) -> None:

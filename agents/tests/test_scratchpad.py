@@ -253,6 +253,27 @@ async def test_every_call_answered_after_final_answer(rejected):
     assert agent.messages[3].content.startswith("Not run")
 
 
+async def test_no_not_run_filler_when_dispatch_raises(monkeypatch):
+    agent = _agent()
+
+    async def boom(client, tool_call, deferred):
+        raise RuntimeError("gateway gone")
+
+    monkeypatch.setattr(agent, "_execute_mcp_tool", boom)
+    agent.all_tools["fs_read"] = {"type": "function", "function": {"name": "fs_read"}}
+    agent.toolbelt.add("fs_read")
+    with pytest.raises(RuntimeError):
+        await agent._handle_tool_calls(
+            None,
+            [
+                _call(1, "todo_write", {"todos": [], "merge": True}),
+                _call(2, "fs_read", {}),
+                _call(3, "fs_read", {}),
+            ],
+        )
+    assert [m.tool_call_id for m in agent.messages] == ["c1"]
+
+
 def test_no_duplicate_names_with_a_same_named_mcp_tool():
     agent = _agent(scratchpad=True, use_toolbelt=False)
     clash = {
