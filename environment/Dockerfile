@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # APT_MIRROR must serve /debian and /debian-security; https needs CA certs in the base.
 ARG BASE_IMAGE=debian:trixie-slim
 FROM ${BASE_IMAGE}
@@ -8,11 +6,8 @@ ARG APT_MIRROR=""
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     set -eu \
- && rm -f /etc/apt/apt.conf.d/docker-clean \
- && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
  && if [ -n "$APT_MIRROR" ]; then \
       sed -i "s|http://deb.debian.org|${APT_MIRROR%/}|g" /etc/apt/sources.list.d/debian.sources || exit 1; \
     fi \

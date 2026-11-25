@@ -190,15 +190,18 @@ what we removed.
     that starts servers with `uv run` must set `UV_NO_SYNC` there too (as
     `examples/hugging_face_task` does). Otherwise uv reinstalls the dev
     groups when the server starts.
-  - The uv, npm and apt caches are cache mounts, so they stay out of the
-    image; uv's cache alone was 3 GB. All apt packages install in one step.
+  - The uv and npm caches and apt's package lists are cache mounts, so they
+    stay out of the image; uv's cache alone was 3 GB. All apt packages install
+    in one step.
   - The server venvs and the code sandbox mirror install in one step that
     ends with `hardlink`, so identical files are stored once (about 4.5 GB).
   - A failed step now fails the build: the code step's `;` chain is now `&&`,
     and each server sync in the loop exits on error. The unused GitHub-token secret is gone.
-  - New build args `BASE_IMAGE` and `APT_MIRROR` (also read from the
-    environment by `docker compose`) let restricted networks use a registry
-    or apt mirror. The mirror must serve `/debian` and `/debian-security`, and
+  - New build args `BASE_IMAGE` and `APT_MIRROR` (set through
+    `ARCHIPELAGO_BASE_IMAGE` and `ARCHIPELAGO_APT_MIRROR` for `docker
+    compose`) let restricted networks use a registry or apt mirror. The
+    Dockerfile has no `# syntax` line, so BuildKit doesn't fetch a frontend
+    from Docker Hub. The mirror must serve `/debian` and `/debian-security`, and
     an `https://` mirror needs a base image with CA certificates. The mirror
     URL is visible in `docker history`. The grid's image tag hashes only the
     source trees, so pass `--rebuild` after changing either.

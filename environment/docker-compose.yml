@@ -11,8 +11,8 @@ services:
       context: ..
       dockerfile: environment/Dockerfile
       args:
-        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
-        APT_MIRROR: ${APT_MIRROR:-}
+        BASE_IMAGE: ${ARCHIPELAGO_BASE_IMAGE:-debian:trixie-slim}
+        APT_MIRROR: ${ARCHIPELAGO_APT_MIRROR:-}
     image: ${ENV_IMAGE:-archipelago-environment:local}
     # The default bridge, not a network per project: Docker runs out of
     # address pools after a few dozen networks.
