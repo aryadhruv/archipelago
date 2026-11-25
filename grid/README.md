@@ -19,7 +19,25 @@ simulated human (`human`, below), from `agents/.env`. The grid itself never
 reads keys. `validate` asks each runner whether its keys are present and
 prints only the key names that are missing. For `openrouter/` models it also
 checks OpenRouter's public model list, and fails on a model it no longer
-serves.
+serves. Then it makes one short call per model through the agent runner
+(same keys, proxy and `extra_args` as a run), asking it to call a dummy tool:
+an error that will repeat (model not found, bad key, no credits, no access,
+bad request; HTTP 400, 401, 402, 403, 404 or 422) fails the check. A temporary error (rate limit, timeout, 5xx,
+dropped connection), or a model that writes the call as text or doesn't call
+the tool, is a warning. `--no-keys` skips
+this along with the key check.
+
+### Platform
+
+Grids run on Linux (and macOS for local work). Windows is untested, and these
+are known to break there:
+
+- Grading imports the Unix-only `resource` module
+  (`grading/runner/utils/metrics.py`, `evals/llm_code_verifier/main.py`).
+- Killing a timed-out preflight probe uses Unix process groups (`os.killpg`).
+- Four grid tests fail on Windows only (CRLF line endings, backslash paths,
+  `SIGKILL`, and the probe-kill test, which uses `sh`, `ps` and process
+  groups).
 
 ## Inputs
 
@@ -66,7 +84,7 @@ Keep real inputs and outputs outside the repository. Point `inputs` and
 | `port_base` | 8100 | Ports are taken from here up, skipping busy ones |
 | `judge` | required | `{"model": ..., "extra_args": ...}` |
 | `agent_config` | `defaults/agent_config.json` | react_toolbelt_agent, 50 steps, 1 h wall clock, append-only scratchpad on (a custom `agent_config` turns it off unless it sets `"scratchpad": true`) |
-| `system_prompt` | `defaults/system_prompt.md` | The prompt from the examples, plus `defaults/scratchpad_prompt.md` when the scratchpad is on |
+| `system_prompt` | `defaults/system_prompt.md` | The prompt from the examples with a short "Working on your own" section (text messages aren't read until `final_answer`, so ask with a tool if one is given; files are in the filesystem; save files with a tool), plus `defaults/scratchpad_prompt.md` when the scratchpad is on |
 | `mcp_config` | `defaults/mcp_config.json` | All nine servers, each with its own venv Python over stdio |
 | `eval_configs`, `scoring_config` | `defaults/` | `output_llm` criteria, plain average |
 | `env_image` | built from the checked-out `environment/` and `mcp_servers/` | Pin an existing image |

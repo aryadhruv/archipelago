@@ -83,6 +83,10 @@ MCP_CALL_MAY_HAVE_RUN = (
 # litellm normalizes Gemini MAX_TOKENS and Anthropic max_tokens to "length".
 TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
 NO_TOOL_CALL_MESSAGE = "No tools called. Use final_answer to submit your answer. Please continue completing the task."
+NOT_RUN_MESSAGE = (
+    "Not run: final_answer was called in the same batch. "
+    "Call this tool again if you still need it."
+)
 TRUNCATED_REPLY_MESSAGE = (
     "Your last reply was cut off at the output limit before any tool call "
     "completed, so nothing was run. Do not resend the same large content. "
@@ -502,8 +506,38 @@ class ReActAgent:
         start = len(self.messages)
         try:
             await self._dispatch_tool_calls(client, tool_calls)
+            # Not on an exception: the run is ending, and "Not run because of
+            # final_answer" would be false there.
+            self._answer_unanswered(start, tool_calls)
         finally:
             self._restore_call_order(start, tool_calls)
+
+    def _answer_unanswered(self, start: int, tool_calls: list[Any]) -> None:
+        """Give every call in the batch a result.
+
+        final_answer returns early, accepted or rejected, so calls after it
+        would otherwise get none, and most providers reject the next request
+        when a tool call has no result."""
+        if not any(tc.function.name == "final_answer" for tc in tool_calls):
+            # Only final_answer leaves calls unanswered, and NOT_RUN_MESSAGE
+            # names it as the reason.
+            return
+        answered = {
+            get_msg_attr(m, "tool_call_id")
+            for m in self.messages[start:]
+            if get_msg_attr(m, "role") == "tool"
+        }
+        for tool_call in tool_calls:
+            if tool_call.id in answered:
+                continue
+            self.messages.append(
+                LitellmOutputMessage(
+                    role="tool",
+                    tool_call_id=tool_call.id,
+                    name=tool_call.function.name,
+                    content=NOT_RUN_MESSAGE,
+                )
+            )
 
     def _restore_call_order(self, start: int, tool_calls: list[Any]) -> None:
         """Stable-sort this batch's tool results by call position.
@@ -522,10 +556,11 @@ class ReActAgent:
     async def _dispatch_tool_calls(self, client: Any, tool_calls: list[Any]) -> None:
         """Process tool calls."""
         mcp_tool_calls: list[Any] = []
+        final_call: Any = None
 
-        # Scratchpad calls go first: they only touch local state, and the
-        # final_answer branch below returns early, which would otherwise drop
-        # notes written in the same batch (or leave their calls unanswered).
+        # Scratchpad calls go first: they only touch local state, and calls
+        # after final_answer don't run, which would otherwise drop notes
+        # written in the same batch.
         scratchpad_ids: set[str] = set()
         if self.scratchpad:
             for tool_call in tool_calls:
@@ -538,50 +573,11 @@ class ReActAgent:
             if tool_call.id in scratchpad_ids:
                 continue
 
-            # Final answer - validate todos, then handle and return
+            # Final answer: stop here. Calls after it in the batch don't run
+            # (they get NOT_RUN_MESSAGE); calls before it run first, below.
             if name == "final_answer":
-                # Check for incomplete todos
-                assert self.meta_tool_handler
-                incomplete = self.meta_tool_handler.get_incomplete_todos()
-                if incomplete:
-                    incomplete_list = ", ".join(
-                        f"'{t.id}' ({t.status.value})" for t in incomplete
-                    )
-                    error_msg = (
-                        f"ERROR: Cannot submit final_answer with incomplete todos. "
-                        f"You have {len(incomplete)} incomplete task(s): {incomplete_list}. "
-                        f"Use todo_write to mark each as 'completed' or 'cancelled' first."
-                    )
-                    logger.bind(message_type="tool").warning(
-                        f"final_answer rejected: {len(incomplete)} incomplete todos"
-                    )
-                    self.messages.append(
-                        LitellmOutputMessage(
-                            role="tool",
-                            tool_call_id=tool_call.id,
-                            name="final_answer",
-                            content=error_msg,
-                        )
-                    )
-                    return
-
-                answer, status = parse_final_answer(tool_call.function.arguments)
-                self._usage_tracker.track_final_answer(answer)
-                logger.bind(message_type="final_answer").info(answer)
-
-                self._finalized = True
-                self._final_answer = answer
-                self._final_status = status
-
-                self.messages.append(
-                    LitellmOutputMessage(
-                        role="tool",
-                        tool_call_id=tool_call.id,
-                        name="final_answer",
-                        content=answer,
-                    )
-                )
-                return
+                final_call = tool_call
+                break
 
             # Meta-tool - handle locally
             if name in META_TOOL_NAMES and (self.use_toolbelt or name == "todo_write"):
@@ -614,11 +610,59 @@ class ReActAgent:
             # MCP tool - collect for batch execution
             mcp_tool_calls.append(tool_call)
 
-        # Execute MCP tools (using shared client connection)
+        # Execute MCP tools (using shared client connection). This comes
+        # before final_answer, so a file written in the same batch as the
+        # answer exists when the run ends.
         deferred_image_messages: list[LitellmInputMessage] = []
         for tool_call in mcp_tool_calls:
             await self._execute_mcp_tool(client, tool_call, deferred_image_messages)
         self.messages.extend(deferred_image_messages)
+
+        if final_call is not None:
+            self._handle_final_answer(final_call)
+
+    def _handle_final_answer(self, tool_call: Any) -> None:
+        """Accept the answer, or reject it while todos are incomplete."""
+        assert self.meta_tool_handler
+        incomplete = self.meta_tool_handler.get_incomplete_todos()
+        if incomplete:
+            incomplete_list = ", ".join(
+                f"'{t.id}' ({t.status.value})" for t in incomplete
+            )
+            error_msg = (
+                f"ERROR: Cannot submit final_answer with incomplete todos. "
+                f"You have {len(incomplete)} incomplete task(s): {incomplete_list}. "
+                f"Use todo_write to mark each as 'completed' or 'cancelled' first."
+            )
+            logger.bind(message_type="tool").warning(
+                f"final_answer rejected: {len(incomplete)} incomplete todos"
+            )
+            self.messages.append(
+                LitellmOutputMessage(
+                    role="tool",
+                    tool_call_id=tool_call.id,
+                    name="final_answer",
+                    content=error_msg,
+                )
+            )
+            return
+
+        answer, status = parse_final_answer(tool_call.function.arguments)
+        self._usage_tracker.track_final_answer(answer)
+        logger.bind(message_type="final_answer").info(answer)
+
+        self._finalized = True
+        self._final_answer = answer
+        self._final_status = status
+
+        self.messages.append(
+            LitellmOutputMessage(
+                role="tool",
+                tool_call_id=tool_call.id,
+                name="final_answer",
+                content=answer,
+            )
+        )
 
     async def _execute_mcp_tool(
         self,

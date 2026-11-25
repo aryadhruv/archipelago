@@ -189,8 +189,50 @@ def _attempt_file(store: Store, run_id: str, name: str) -> Path:
     return path
 
 
+class SharedPreflight:
+    """The last preflight result, and at most one preflight running at a time.
+
+    Preflight makes a model call per model, so a second tab or a reload
+    joins the one in progress instead of starting another."""
+
+    def __init__(self, grid: Grid):
+        self.grid = grid
+        self.result: dict[str, Any] = {}
+        self._task: asyncio.Task[None] | None = None
+
+    async def get(self, refresh: bool = False) -> dict[str, Any]:
+        running = self._task
+        if refresh and running is not None:
+            # That run may predate the fix being checked (an edited .env), so
+            # wait for it, then run again. The first refresher back starts the
+            # new run; the others that waited join it.
+            with contextlib.suppress(Exception):
+                await asyncio.shield(running)
+            if self._task is None:
+                self._start()
+        elif self._task is None and (refresh or not self.result):
+            self._start()
+        if self._task is not None:
+            # Shielded: a client that disconnects doesn't cancel it for the others.
+            await asyncio.shield(self._task)
+        return self.result
+
+    def _start(self) -> None:
+        task = asyncio.ensure_future(self._run())
+        # Mark a failure as seen even if every client left, so asyncio doesn't
+        # log "Task exception was never retrieved"; waiters still get it.
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())
+        self._task = task
+
+    async def _run(self) -> None:
+        try:
+            self.result = summarize(await run_preflight(self.grid))
+        finally:
+            self._task = None
+
+
 def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
-    preflight: dict[str, Any] = {}
+    preflight = SharedPreflight(grid)
     smoke = Smoke(grid, control.log)
 
     @contextlib.asynccontextmanager
@@ -208,10 +250,7 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
 
     @app.get("/api/preflight")
     async def get_preflight(refresh: bool = False) -> dict[str, Any]:
-        if refresh or not preflight:
-            preflight.clear()
-            preflight.update(summarize(await run_preflight(grid)))
-        return preflight
+        return await preflight.get(refresh)
 
     @app.post("/api/grid/start")
     async def start() -> dict[str, str]:

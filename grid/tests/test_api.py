@@ -157,6 +157,9 @@ def test_scratchpad_falls_back_to_the_event_log(tmp_path):
                     {"extra": {"message_type": "scratchpad_entry", "payload": entry}}
                 ),
                 "not json",
+                "[1, 2]",
+                json.dumps({"extra": "text"}),
+                json.dumps({"extra": ["a"]}),
             ]
         )
     )

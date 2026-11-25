@@ -124,14 +124,18 @@ what we removed.
     compaction, since `scratchpad_read` returns them word for word. Scratchpad
     calls in the same batch as `final_answer` are handled first, so they are
     never dropped or left without a tool result.
-  - The judge doesn't see the notes. `output_llm` reads the final answer, the
-    world's file changes and the user and assistant text of the messages;
-    notes are in tool calls and tool results, which it leaves out. A model
-    that repeats its notes in plain text exposes them, as with any text reply.
+  - The grid's judge doesn't see the notes. The grid wires up only
+    `output_llm`, which reads the final answer, the world's file changes and
+    the user and assistant text of the messages; notes are in tool calls and
+    tool results, which it leaves out. A model that repeats its notes in plain
+    text exposes them, as with any text reply. Verifiers that read tool calls
+    (`tool_call_llm_check`, `tool_call_check`, the `db_*_llm_tools` checks,
+    `vca_behavior_llm_check`) would see them if a task used one.
   - Grid: when the agent config turns the scratchpad on (`true` or `"true"`,
     parsed as the agent parses it, and only for `react_toolbelt_agent`), the
     grid adds `defaults/scratchpad_prompt.md` to the system prompt, the same
-    wording for every model.
+    wording for every model. Run Detail shows the notes, and reads them from
+    the event log when the grid killed the agent before it wrote its output.
   - The model is told the scratchpad is private, and nothing in the tool or
     prompt text mentions reviewers or grading, because models change what
     they write when told they're watched. The notes are in fact logged and
@@ -142,8 +146,32 @@ what we removed.
   section asking the model to explain its reasoning in 1-3 sentences before
   each tool call. Models reason before acting anyway, and no model-facing
   text asks for "thinking". The agent README's recommended prompt still has
-  the upstream wording. Run Detail shows the notes, and reads them from
-    the event log when the grid killed the agent before it wrote its output.
+  the upstream wording.
+- **"Working on your own" in the default prompt.** The grid's
+  `defaults/system_prompt.md` tells the model that its text messages aren't
+  read until `final_answer` (so it should ask through a tool if it has one,
+  as in human-in-the-loop grids), that any files the task refers to are in
+  the filesystem, and that a file it is asked for must be created with a
+  tool. Models stopped to ask for
+  confirmation, or pasted a deliverable into chat, and ended the run with
+  nothing saved.
+- **Round-trip preflight** (grid). After the key and OpenRouter checks pass,
+  `validate`, `run` and the dashboard's preflight make one short call per
+  model through the agent runner, asking it to call a dummy tool. An error
+  that will repeat (HTTP 400, 401, 402, 403, 404 or 422: not found, auth,
+  no credits, no access, bad request) fails preflight. The status counts as
+  well as the error class, since litellm maps OpenRouter's 402 and 403 to a
+  generic `APIError`. A temporary error, writing the call as text, or not calling the
+  tool is a warning, so one flaky provider doesn't block the grid.
+- **Shorter validation errors** (every MCP server's
+  `validation_error_sanitizer.py`). Each bad argument name is echoed back,
+  and a malformed call can turn a whole payload (a CSV, say) into one key.
+  A name over 80 characters, or with a newline, is cut to its first 60 and
+  its length. Every error keeps its field and message; only the echoed name
+  is shorter.
+- **Skipped PDF pages are named** (`read_pdf_pages`). Pages past the end
+  were already dropped silently. The result's errors now say which pages
+  were skipped and how many the document has.
 
 ## Fixed
 
@@ -156,3 +184,17 @@ what we removed.
 - **Agent timeout fault.** The runner's outer `AGENT_TIMEOUT_SECONDS` timeout now
   records a `budget_exhausted` / `wall_clock` fault, so it can be told apart
   from an infrastructure error.
+- **Unanswered calls after `final_answer`** (`react_toolbelt_agent`).
+  `final_answer` returned early, whether it was accepted or rejected for open
+  todos, so other calls in the same batch got no result and the next request
+  failed with a 400. Each of those calls now gets a "Not run" result asking the
+  model to call it again.
+- **Calls before `final_answer` dropped** (`react_toolbelt_agent`). MCP calls
+  run after the batch loop, and `final_answer` returned before it, so in
+  `[write a file, final_answer]` the write never ran: the answer was accepted,
+  the run ended without the file, and the model was scored as if it hadn't
+  done the work. Calls before `final_answer` in a batch now run first; only
+  calls after it get "Not run".
+- **Run Detail on odd event-log lines** (grid). A line in `agent_events.jsonl`
+  whose `extra` wasn't an object made the scratchpad fallback raise, and Run
+  Detail returned 500. Such lines are now skipped.

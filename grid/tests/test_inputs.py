@@ -85,6 +85,7 @@ def test_load_grid(grid_dir):
     assert grid.grading_settings["llm_judge_model"] == "openrouter/x/j"
     assert grid.output_dir == grid_dir / "runs"
     assert "toolbelt" in grid.system_prompt
+    assert "## Working on your own" in grid.system_prompt
     assert "filesystem_server" in grid.mcp_config["mcpServers"]
 
 

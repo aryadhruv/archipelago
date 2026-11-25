@@ -208,8 +208,11 @@ def _logged_notes(events_path: Path | None) -> list[dict[str, Any]] | None:
     notes = []
     for line in events_path.read_text(errors="replace").splitlines():
         try:
-            extra = json.loads(line).get("extra") or {}
-        except (json.JSONDecodeError, AttributeError):
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        extra = record.get("extra") if isinstance(record, dict) else None
+        if not isinstance(extra, dict):
             continue
         if extra.get("message_type") == "scratchpad_entry" and isinstance(
             extra.get("payload"), dict

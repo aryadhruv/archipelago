@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -33,16 +34,36 @@ INFRA_ERRORS = (InfraError, httpx.HTTPError, DockerException, OSError)
 
 
 async def run_cmd(
-    *args: str, cwd: Path | None = None, env: dict[str, str] | None = None
+    *args: str,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    own_group: bool = False,
 ) -> tuple[int, str]:
+    """Run a command and return its exit code and combined output.
+
+    With `own_group`, the command gets its own process group, and a cancel
+    (e.g. a timeout around this call) kills the whole group: `uv run` starts
+    the real process as a child, which killing `uv` alone would leave behind."""
     proc = await asyncio.create_subprocess_exec(
         *args,
         cwd=cwd,
         env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
+        start_new_session=own_group,
     )
-    out, _ = await proc.communicate()
+    try:
+        out, _ = await proc.communicate()
+    except asyncio.CancelledError:
+        if own_group:
+            # Gone already (ProcessLookupError), or, on macOS, only unreaped
+            # zombies left (PermissionError): nothing left to kill either way.
+            with contextlib.suppress(OSError):
+                os.killpg(proc.pid, signal.SIGKILL)
+            # Reap it so its pipe and transport close now, not at shutdown.
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(proc.wait(), 5)
+        raise
     return proc.returncode or 0, out.decode(errors="replace")
 
 
