@@ -182,10 +182,24 @@ async def _openrouter_check(models: list[str]) -> Check | None:
     )
 
 
-def _round_trip_result(results: list[dict]) -> Check:
-    """Fail on a model that errors; warn on one that didn't call the tool.
+# Errors that will come back on every call: the model id, the key, or the
+# request (tools, params) is wrong. Anything else (rate limits, timeouts, 5xx,
+# dropped connections) may clear by itself, and a run retries those, so it
+# only warns rather than blocking the grid.
+LASTING_ERRORS = frozenset(
+    {
+        "NotFoundError",
+        "AuthenticationError",
+        "PermissionDeniedError",
+        "BadRequestError",
+        "UnsupportedParamsError",
+        "UnprocessableEntityError",
+    }
+)
 
-    A rate limit is only a warning: free models hit them, and a run retries."""
+
+def _round_trip_result(results: list[dict]) -> Check:
+    """Fail on an error that will repeat; warn on anything else that isn't a tool call."""
     label = "Every model answers a call and calls a tool"
     failed, warned = [], []
     for r in results:
@@ -194,7 +208,7 @@ def _round_trip_result(results: list[dict]) -> Check:
             continue
         if status == "error":
             line = f"{r['id']}: {r.get('error')} {r.get('detail', '')}".strip()
-            (warned if r.get("error") == "RateLimitError" else failed).append(line)
+            (failed if r.get("error") in LASTING_ERRORS else warned).append(line)
         elif status == "text":
             warned.append(f"{r['id']}: wrote the tool call as text")
         else:

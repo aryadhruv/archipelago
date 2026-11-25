@@ -72,6 +72,12 @@ def test_round_trip_error_fails():
         ({"status": "text"}, "a: wrote the tool call as text"),
         ({"status": "no_call"}, "a: didn't call the tool"),
         ({"status": "error", "error": "RateLimitError"}, "a: RateLimitError"),
+        ({"status": "error", "error": "Timeout"}, "a: Timeout"),
+        (
+            {"status": "error", "error": "ServiceUnavailableError"},
+            "a: ServiceUnavailableError",
+        ),
+        ({"status": "error", "error": "APIConnectionError"}, "a: APIConnectionError"),
     ],
 )
 def test_round_trip_warnings(result, detail):
@@ -103,3 +109,13 @@ def test_round_trip_probe_crash_warns(monkeypatch):
     check = asyncio.run(preflight._round_trip_check(grid))
     assert check.status == "warn"
     assert "ImportError: boom" in check.detail
+
+
+@pytest.mark.parametrize(
+    "error", ["NotFoundError", "AuthenticationError", "BadRequestError"]
+)
+def test_round_trip_lasting_errors_fail(error):
+    check = preflight._round_trip_result(
+        [{"id": "a", "status": "error", "error": error}]
+    )
+    assert check.status == "fail"

@@ -156,8 +156,9 @@ what we removed.
 - **Round-trip preflight** (grid). After the key and OpenRouter checks pass,
   `validate`, `run` and the dashboard's preflight make one short call per
   model through the agent runner, asking it to call a dummy tool. An error
-  fails preflight; writing the call as text, not calling the tool, or a rate
-  limit is a warning.
+  that will repeat (not found, auth, permission, bad request) fails
+  preflight. A temporary error, writing the call as text, or not calling the
+  tool is a warning, so one flaky provider doesn't block the grid.
 - **Shorter validation errors** (every MCP server's
   `validation_error_sanitizer.py`). Each bad argument name is echoed back,
   and a malformed call can turn a whole payload (a CSV, say) into one key.
