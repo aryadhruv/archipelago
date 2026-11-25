@@ -56,7 +56,9 @@ async def run_cmd(
         out, _ = await proc.communicate()
     except asyncio.CancelledError:
         if own_group:
-            with contextlib.suppress(ProcessLookupError):
+            # Gone already (ProcessLookupError), or, on macOS, only unreaped
+            # zombies left (PermissionError): nothing left to kill either way.
+            with contextlib.suppress(OSError):
                 os.killpg(proc.pid, signal.SIGKILL)
         raise
     return proc.returncode or 0, out.decode(errors="replace")
