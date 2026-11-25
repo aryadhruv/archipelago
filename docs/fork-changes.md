@@ -148,9 +148,11 @@ what we removed.
   text asks for "thinking". The agent README's recommended prompt still has
   the upstream wording.
 - **"Working on your own" in the default prompt.** The grid's
-  `defaults/system_prompt.md` tells the model that no one replies while it
-  works, that the task's files are in the filesystem, and that a file it is
-  asked for must be created with a tool. Models stopped to ask for
+  `defaults/system_prompt.md` tells the model that its text messages aren't
+  read until `final_answer` (so it should ask through a tool if it has one,
+  as in human-in-the-loop grids), that any files the task refers to are in
+  the filesystem, and that a file it is asked for must be created with a
+  tool. Models stopped to ask for
   confirmation, or pasted a deliverable into chat, and ended the run with
   nothing saved.
 - **Round-trip preflight** (grid). After the key and OpenRouter checks pass,
