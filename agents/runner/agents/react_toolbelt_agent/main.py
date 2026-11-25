@@ -213,6 +213,14 @@ class ReActAgent:
         toolbelt_tools = [self.all_tools[name] for name in self.toolbelt]
         meta_tools = META_TOOLS if self.use_toolbelt else [TODO_WRITE_TOOL]
         scratchpad_tools = SCRATCHPAD_TOOLS if self.scratchpad else []
+        if scratchpad_tools:
+            # The local scratchpad shadows an MCP tool of the same name;
+            # sending both would repeat the name, which providers reject.
+            toolbelt_tools = [
+                t
+                for t in toolbelt_tools
+                if t.get("function", {}).get("name") not in SCRATCHPAD_TOOL_NAMES
+            ]
         return (
             list(meta_tools)
             + list(scratchpad_tools)
@@ -456,12 +464,52 @@ class ReActAgent:
         for uri in image_uris:
             self._usage_tracker.track_tool_output_image(uri)
 
+    def _handle_scratchpad_call(self, tool_call: Any) -> None:
+        """Append-only notes, handled locally and kept outside the sandbox."""
+        assert self.scratchpad
+        name = tool_call.function.name
+        logger.bind(
+            message_type="tool_call",
+            ref=tool_call.id,
+            name=name,
+            payload=tool_call.function.arguments,
+        ).info(f"Scratchpad: {name}")
+        result = self.scratchpad.handle(
+            name, tool_call.function.arguments, self._step_number
+        )
+        logger.bind(
+            message_type="tool_result",
+            ref=tool_call.id,
+            name=name,
+            payload=result,
+        ).info(f"Scratchpad {name} completed")
+        self.messages.append(
+            LitellmOutputMessage(
+                role="tool",
+                tool_call_id=tool_call.id,
+                name=name,
+                content=result,
+            )
+        )
+
     async def _handle_tool_calls(self, client: Any, tool_calls: list[Any]) -> None:
         """Process tool calls."""
         mcp_tool_calls: list[Any] = []
 
+        # Scratchpad calls go first: they only touch local state, and the
+        # final_answer branch below returns early, which would otherwise drop
+        # notes written in the same batch (or leave their calls unanswered).
+        scratchpad_ids: set[str] = set()
+        if self.scratchpad:
+            for tool_call in tool_calls:
+                if tool_call.function.name in SCRATCHPAD_TOOL_NAMES:
+                    self._handle_scratchpad_call(tool_call)
+                    scratchpad_ids.add(tool_call.id)
+
         for tool_call in tool_calls:
             name = tool_call.function.name
+            if tool_call.id in scratchpad_ids:
+                continue
 
             # Final answer - validate todos, then handle and return
             if name == "final_answer":
@@ -507,33 +555,6 @@ class ReActAgent:
                     )
                 )
                 return
-
-            # Scratchpad - handle locally; append-only, kept outside the sandbox
-            if self.scratchpad and name in SCRATCHPAD_TOOL_NAMES:
-                logger.bind(
-                    message_type="tool_call",
-                    ref=tool_call.id,
-                    name=name,
-                    payload=tool_call.function.arguments,
-                ).info(f"Scratchpad: {name}")
-                result = self.scratchpad.handle(
-                    name, tool_call.function.arguments, self._step_number
-                )
-                logger.bind(
-                    message_type="tool_result",
-                    ref=tool_call.id,
-                    name=name,
-                    payload=result,
-                ).info(f"Scratchpad {name} completed")
-                self.messages.append(
-                    LitellmOutputMessage(
-                        role="tool",
-                        tool_call_id=tool_call.id,
-                        name=name,
-                        content=result,
-                    )
-                )
-                continue
 
             # Meta-tool - handle locally
             if name in META_TOOL_NAMES and (self.use_toolbelt or name == "todo_write"):

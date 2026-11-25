@@ -61,11 +61,14 @@ record any change in behavior in [`fork-changes.md`](./fork-changes.md).
    `react_toolbelt_agent` (see `fork-changes.md`).
    - Show notes written per model, and the share of runs that used the
      scratchpad, on the leaderboard.
+   - Check each finished run's `output.scratchpad` against the
+     `scratchpad_entry` records in its `agent_events.jsonl`, and flag runs
+     where they differ.
    - Optionally, an LLM monitor that reads the notes alongside the run's tool
      calls and flags shortcuts or gaming. Keep it out of the task score: once
      notes are scored, models learn to write notes that score well.
-   - The hash chain shows edits or dropped entries, but not truncation at the
-     end. To catch that, put the last hash in the agent log.
+   - Check whether models use it: in the first smoke runs (free models, one
+     easy task) none called the scratchpad tools.
 
 ### Small fixes
 

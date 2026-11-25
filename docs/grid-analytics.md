@@ -89,7 +89,8 @@ One point per model that has at least one scored run:
 
 ### Tool-usage profile
 
-For each model and each MCP server (plus `toolbelt` for the meta-tools), the
+For each model and each MCP server (plus `toolbelt` for the harness's own
+tools: the meta-tools, `final_answer` and the scratchpad), the
 number of `tool_call` events, counted over **every attempt of every run**:
 failed and superseded attempts, gave-up runs, and runs still in progress
 all count. The UI shows each server's **share** of the model's calls. It

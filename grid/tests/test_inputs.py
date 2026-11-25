@@ -170,16 +170,30 @@ def test_scratchpad_off_leaves_the_prompt_alone(grid_dir):
     [
         (True, True),
         ("true", True),
-        (1, True),
+        (" TRUE ", True),
+        # The agent's _coerce_bool reads all of these as off; the grid must too.
+        (1, False),
+        ("1", False),
+        (1.0, False),
         (False, False),
         ("no", False),
         (None, False),
     ],
 )
-def test_scratchpad_enabled(value, expected):
-    assert (
-        scratchpad_enabled({"agent_config_values": {"scratchpad": value}}) is expected
-    )
+def test_scratchpad_enabled_matches_the_agent(value, expected):
+    config = {
+        "agent_config_id": "react_toolbelt_agent",
+        "agent_config_values": {"scratchpad": value},
+    }
+    assert scratchpad_enabled(config) is expected
+
+
+def test_scratchpad_only_for_the_toolbelt_agent():
+    config = {
+        "agent_config_id": "loop_agent",
+        "agent_config_values": {"scratchpad": True},
+    }
+    assert scratchpad_enabled(config) is False
 
 
 def _with_human(grid_dir, human, personas=None):

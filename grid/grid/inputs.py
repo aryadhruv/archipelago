@@ -297,11 +297,17 @@ def load_grid(config_path: Path) -> Grid:
 
 
 def scratchpad_enabled(agent_config: dict[str, Any]) -> bool:
-    """Whether the agent config turns on react_toolbelt_agent's scratchpad."""
+    """Whether the agent config turns on react_toolbelt_agent's scratchpad.
+
+    Must agree with the agent's own parsing (``_coerce_bool`` with default
+    off: only true or "true"), or the prompt would promise tools the agent
+    never offers. Other harnesses have no scratchpad."""
+    if agent_config.get("agent_config_id") != "react_toolbelt_agent":
+        return False
     value = (agent_config.get("agent_config_values") or {}).get("scratchpad")
     if isinstance(value, str):
-        return value.strip().lower() in ("true", "1")
-    return value is True or value == 1
+        return value.strip().lower() == "true"
+    return value is True
 
 
 def agent_config_for(grid: Grid, model: Model) -> dict[str, Any]:

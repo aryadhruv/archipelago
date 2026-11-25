@@ -144,6 +144,30 @@ def test_scratchpad_from_the_trajectory_output():
     assert scratchpad(None) is None
 
 
+def test_scratchpad_falls_back_to_the_event_log(tmp_path):
+    from grid.views import scratchpad
+
+    log = tmp_path / "agent_events.jsonl"
+    entry = {"index": 0, "step": 1, "elapsed_sec": 0.5, "note": "plan", "hash": "h"}
+    log.write_text(
+        "\n".join(
+            [
+                json.dumps({"extra": {"message_type": "tool_call", "name": "x"}}),
+                json.dumps(
+                    {"extra": {"message_type": "scratchpad_entry", "payload": entry}}
+                ),
+                "not json",
+            ]
+        )
+    )
+    # The grid killed the agent: its trajectory has no output.
+    assert scratchpad({"output": None}, log) == [
+        {"index": 0, "step": 1, "note": "plan"}
+    ]
+    assert scratchpad({"output": {"scratchpad": []}}, log) == []
+    assert scratchpad(None, tmp_path / "missing.jsonl") is None
+
+
 def test_final_answer_from_the_tool_message():
     from grid.views import final_answer
 
