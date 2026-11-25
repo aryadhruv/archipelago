@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from runner.agents.models import AgentRunInput
+from runner.agents.models import AgentRunInput, LitellmOutputMessage
 from runner.agents.react_toolbelt_agent.main import ReActAgent
 from runner.agents.react_toolbelt_agent.scratchpad import (
     MAX_NOTE_CHARS,
@@ -235,3 +235,43 @@ def test_no_duplicate_names_with_a_same_named_mcp_tool():
     agent.toolbelt.add("scratchpad_write")
     names = _tool_names(agent)
     assert len(names) == len(set(names))
+
+
+async def test_results_keep_call_order(monkeypatch):
+    agent = _agent(scratchpad=True)
+
+    async def fake_mcp(client, tool_call, deferred):
+        agent.messages.append(
+            LitellmOutputMessage(
+                role="tool",
+                tool_call_id=tool_call.id,
+                name=tool_call.function.name,
+                content="ok",
+            )
+        )
+        deferred.append({"role": "user", "content": "image"})
+
+    monkeypatch.setattr(agent, "_execute_mcp_tool", fake_mcp)
+    agent.all_tools["fs_read"] = {"type": "function", "function": {"name": "fs_read"}}
+    agent.toolbelt.add("fs_read")
+    await agent._handle_tool_calls(
+        None,
+        [
+            _call(1, "fs_read", {}),
+            _call(2, "scratchpad_write", {"note": "n"}),
+            _call(3, "todo_write", {"todos": [], "merge": True}),
+            _call(4, "fs_read", {}),
+        ],
+    )
+    roles_ids = [
+        (m["role"], None) if isinstance(m, dict) else (m.role, m.tool_call_id)
+        for m in agent.messages
+    ]
+    assert roles_ids == [
+        ("tool", "c1"),
+        ("tool", "c2"),
+        ("tool", "c3"),
+        ("tool", "c4"),
+        ("user", None),  # one deferred image per MCP call, after all results
+        ("user", None),
+    ]

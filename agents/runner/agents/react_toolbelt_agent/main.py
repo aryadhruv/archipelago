@@ -493,6 +493,33 @@ class ReActAgent:
         )
 
     async def _handle_tool_calls(self, client: Any, tool_calls: list[Any]) -> None:
+        """Process tool calls, then put their results back in call order.
+
+        Local tools (scratchpad, meta-tools) answer inline while MCP results
+        are appended after the loop, so without this a batch like
+        [mcp_read, todo_write] would come back as [todo_write, mcp_read].
+        Some providers pair function responses with calls by position."""
+        start = len(self.messages)
+        try:
+            await self._dispatch_tool_calls(client, tool_calls)
+        finally:
+            self._restore_call_order(start, tool_calls)
+
+    def _restore_call_order(self, start: int, tool_calls: list[Any]) -> None:
+        """Stable-sort this batch's tool results by call position.
+
+        Anything else appended (deferred image messages) stays after them."""
+        order = {tc.id: i for i, tc in enumerate(tool_calls)}
+        last = len(tool_calls)
+
+        def key(msg: Any) -> int:
+            if get_msg_attr(msg, "role") != "tool":
+                return last
+            return order.get(get_msg_attr(msg, "tool_call_id"), last)
+
+        self.messages[start:] = sorted(self.messages[start:], key=key)
+
+    async def _dispatch_tool_calls(self, client: Any, tool_calls: list[Any]) -> None:
         """Process tool calls."""
         mcp_tool_calls: list[Any] = []
 
