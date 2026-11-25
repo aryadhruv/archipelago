@@ -189,8 +189,34 @@ def _attempt_file(store: Store, run_id: str, name: str) -> Path:
     return path
 
 
+class SharedPreflight:
+    """The last preflight result, and at most one preflight running at a time.
+
+    Preflight makes a model call per model, so a second tab or a reload
+    joins the one in progress instead of starting another."""
+
+    def __init__(self, grid: Grid):
+        self.grid = grid
+        self.result: dict[str, Any] = {}
+        self._task: asyncio.Task[None] | None = None
+
+    async def get(self, refresh: bool = False) -> dict[str, Any]:
+        if self._task is None and (refresh or not self.result):
+            self._task = asyncio.ensure_future(self._run())
+        if self._task is not None:
+            # Shielded: a client that disconnects doesn't cancel it for the others.
+            await asyncio.shield(self._task)
+        return self.result
+
+    async def _run(self) -> None:
+        try:
+            self.result = summarize(await run_preflight(self.grid))
+        finally:
+            self._task = None
+
+
 def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
-    preflight: dict[str, Any] = {}
+    preflight = SharedPreflight(grid)
     smoke = Smoke(grid, control.log)
 
     @contextlib.asynccontextmanager
@@ -208,10 +234,7 @@ def create_app(grid: Grid, store: Store, control: GridControl) -> FastAPI:
 
     @app.get("/api/preflight")
     async def get_preflight(refresh: bool = False) -> dict[str, Any]:
-        if refresh or not preflight:
-            preflight.clear()
-            preflight.update(summarize(await run_preflight(grid)))
-        return preflight
+        return await preflight.get(refresh)
 
     @app.post("/api/grid/start")
     async def start() -> dict[str, str]:

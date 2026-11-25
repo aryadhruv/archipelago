@@ -155,3 +155,30 @@ def _running(pid: int) -> bool:
             return False
         time.sleep(0.1)
     return True
+
+
+def test_dashboard_runs_one_preflight_at_a_time(monkeypatch):
+    from grid import server
+
+    calls = 0
+
+    async def fake_run_preflight(grid):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.05)
+        return [preflight.Check("x", "x", "pass")]
+
+    monkeypatch.setattr(server, "run_preflight", fake_run_preflight)
+    shared = server.SharedPreflight(grid=None)
+
+    async def go():
+        first = await asyncio.gather(
+            shared.get(), shared.get(), shared.get(refresh=True)
+        )
+        assert calls == 1 and all(r["ok"] for r in first)
+        await shared.get()  # cached
+        assert calls == 1
+        await shared.get(refresh=True)
+        assert calls == 2
+
+    asyncio.run(go())
