@@ -1,10 +1,17 @@
 import mailbox
 import os
 import re
+import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from email.errors import HeaderParseError
 from email.header import Header, decode_header
 from email.utils import parseaddr
+
+from loguru import logger
+from utils.config import LOCK_TIMEOUT_SEC, STALE_LOCK_SEC
 
 _linesep = os.linesep.encode("ascii")
 
@@ -25,6 +32,61 @@ class UTF8Mbox(mailbox.mbox):
         msg.set_unixfrom(from_line)
         msg.set_from(from_line[5:])
         return msg
+
+
+class MailboxBusy(Exception):
+    """The mbox lock was not acquired within LOCK_TIMEOUT_SEC."""
+
+
+_thread_locks: dict[str, threading.Lock] = {}
+_thread_locks_guard = threading.Lock()
+
+
+def _thread_lock_for(path: str) -> threading.Lock:
+    key = os.path.realpath(path)
+    with _thread_locks_guard:
+        return _thread_locks.setdefault(key, threading.Lock())
+
+
+def _remove_stale_dot_lock(path: str) -> None:
+    dot_lock = path + ".lock"
+    try:
+        age = time.time() - os.path.getmtime(dot_lock)
+    except OSError:
+        return
+    if age > STALE_LOCK_SEC:
+        logger.warning(f"Removing stale mbox lock {dot_lock} ({age:.0f}s old)")
+        try:
+            os.remove(dot_lock)
+        except OSError:
+            pass
+
+
+@contextmanager
+def locked_mbox(box: mailbox.mbox, path: str) -> Iterator[mailbox.mbox]:
+    """Lock an mbox, waiting up to LOCK_TIMEOUT_SEC (threads first, then processes)."""
+    thread_lock = _thread_lock_for(path)
+    if not thread_lock.acquire(timeout=LOCK_TIMEOUT_SEC):
+        raise MailboxBusy(path)
+    try:
+        deadline = time.monotonic() + LOCK_TIMEOUT_SEC
+        delay = 0.01
+        while True:
+            try:
+                box.lock()
+                break
+            except (mailbox.ExternalClashError, BlockingIOError, FileExistsError) as e:
+                if time.monotonic() >= deadline:
+                    raise MailboxBusy(path) from e
+                _remove_stale_dot_lock(path)
+                time.sleep(delay)
+                delay = min(delay * 2, 0.2)
+        try:
+            yield box
+        finally:
+            box.unlock()
+    finally:
+        thread_lock.release()
 
 
 _FOLD = re.compile(r"[ \t]*\r?\n[ \t]+")

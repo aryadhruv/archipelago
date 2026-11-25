@@ -17,7 +17,13 @@ from dataclasses import dataclass, field
 from email import message_from_bytes
 from email.message import Message
 
-from utils.mbox_utils import UTF8Mbox, message_identity, safe_get_header
+from utils.mbox_utils import (
+    MailboxBusy,
+    UTF8Mbox,
+    locked_mbox,
+    message_identity,
+    safe_get_header,
+)
 from utils.path import resolve_mail_path
 
 MBOX_SUFFIX = ".mbox"
@@ -147,17 +153,14 @@ def _load_mbox(load: MailboxLoad, path: str) -> None:
     source = _relative(path)
     box = UTF8Mbox(path)
     try:
-        box.lock()
-    except (BlockingIOError, OSError):
+        with locked_mbox(box, path):
+            for index, message in enumerate(box):
+                _collect(load, message, source, index)
+    except MailboxBusy:
         load.errors.append(
             f"Mailbox '{source}' is currently busy. Please try again in a moment."
         )
-        return
-    try:
-        for index, message in enumerate(box):
-            _collect(load, message, source, index)
     finally:
-        box.unlock()
         box.close()
 
 

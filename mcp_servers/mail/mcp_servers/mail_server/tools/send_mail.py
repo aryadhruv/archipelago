@@ -7,7 +7,7 @@ from email.utils import formatdate, make_msgid
 from models.mail import MailResponse, SendMailInput
 from utils.config import MAX_SUBJECT_LENGTH
 from utils.decorators import make_async_background
-from utils.mbox_utils import UTF8Mbox
+from utils.mbox_utils import MailboxBusy, UTF8Mbox, locked_mbox
 from utils.path import get_mbox_path
 from utils.structured import structured
 
@@ -181,8 +181,10 @@ def send_mail(input: SendMailInput) -> str:
     try:
         mbox = UTF8Mbox(mbox_path)
         try:
-            mbox.lock()
-        except (BlockingIOError, OSError) as lock_error:
+            with locked_mbox(mbox, mbox_path):
+                mbox.add(msg)
+                mbox.flush()
+        except MailboxBusy as lock_error:
             response = MailResponse(
                 success=False,
                 mail_id=None,
@@ -191,12 +193,7 @@ def send_mail(input: SendMailInput) -> str:
                 error=repr(lock_error),
             )
             return structured(response)
-
-        try:
-            mbox.add(msg)
-            mbox.flush()
         finally:
-            mbox.unlock()
             mbox.close()
     except Exception as exc:
         response = MailResponse(
