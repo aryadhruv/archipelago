@@ -158,12 +158,12 @@ what we removed.
   model through the agent runner, asking it to call a dummy tool. An error
   fails preflight; writing the call as text, not calling the tool, or a rate
   limit is a warning.
-- **Shorter tool errors** (`react_toolbelt_agent`). In a result the tool
-  marks as an error, any line over 500 characters is cut to its first 200
-  and last 100, with a note of how many were cut. Every line stays, so the
-  error type and field names are still there. Argument validation errors
-  print each bad key in full, and a malformed call can make a whole CSV one
-  key. Normal results are untouched, and the event log keeps the full error.
+- **Shorter validation errors** (every MCP server's
+  `validation_error_sanitizer.py`). Each bad argument name is echoed back,
+  and a malformed call can turn a whole payload (a CSV, say) into one key.
+  A name over 80 characters, or with a newline, is cut to its first 60 and
+  its length. Every error keeps its field and message; only the echoed name
+  is shorter.
 - **Skipped PDF pages are named** (`read_pdf_pages`). Pages past the end
   were already dropped silently. The result's errors now say which pages
   were skipped and how many the document has.

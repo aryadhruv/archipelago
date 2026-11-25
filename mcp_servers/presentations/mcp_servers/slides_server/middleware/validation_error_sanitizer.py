@@ -16,11 +16,25 @@ from mcp.types import CallToolRequestParams
 from pydantic import ValidationError as PydanticValidationError
 
 
+# A malformed call can turn a whole payload into one key, and every key is
+# echoed back by name. Cut long ones so each error stays one short readable item.
+_LOC_MAX_CHARS = 80
+_LOC_HEAD_CHARS = 60
+
+
+def _short_loc(segment: object) -> str:
+    text = str(segment)
+    if len(text) <= _LOC_MAX_CHARS and "\n" not in text:
+        return text
+    head = text[:_LOC_HEAD_CHARS].replace("\n", "\\n")
+    return f"{head}... ({len(text)} characters)"
+
+
 def format_validation_error(exc: PydanticValidationError) -> str:
     """Format a Pydantic ValidationError into a concise, URL-free string."""
     parts: list[str] = []
     for err in exc.errors():
-        loc = ".".join(str(segment) for segment in err["loc"])
+        loc = ".".join(_short_loc(segment) for segment in err["loc"])
         msg = err["msg"]
         parts.append(f"{loc}: {msg}" if loc else msg)
     return "Validation error: " + "; ".join(parts)
