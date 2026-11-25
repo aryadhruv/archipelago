@@ -158,8 +158,10 @@ what we removed.
 - **Round-trip preflight** (grid). After the key and OpenRouter checks pass,
   `validate`, `run` and the dashboard's preflight make one short call per
   model through the agent runner, asking it to call a dummy tool. An error
-  that will repeat (not found, auth, permission, bad request) fails
-  preflight. A temporary error, writing the call as text, or not calling the
+  that will repeat (HTTP 400, 401, 402, 403, 404 or 422: not found, auth,
+  no credits, no access, bad request) fails preflight. The status counts as
+  well as the error class, since litellm maps OpenRouter's 402 and 403 to a
+  generic `APIError`. A temporary error, writing the call as text, or not calling the
   tool is a warning, so one flaky provider doesn't block the grid.
 - **Shorter validation errors** (every MCP server's
   `validation_error_sanitizer.py`). Each bad argument name is echoed back,

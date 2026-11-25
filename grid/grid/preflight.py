@@ -50,8 +50,10 @@ async def probe(spec):
             spec["model"], [{"role": "user", "content": PROMPT}], [TOOL],
             90, spec.get("extra_args") or {}, max_attempts=2)
     except Exception as e:
-        return {"id": spec["id"], "status": "error",
-                "error": type(e).__name__, "detail": str(e)[:200]}
+        code = getattr(e, "status_code", None)
+        return {"id": spec["id"], "status": "error", "error": type(e).__name__,
+                "status_code": code if isinstance(code, int) else None,
+                "detail": str(e)[:200]}
     message = response.choices[0].message if response.choices else None
     calls = getattr(message, "tool_calls", None) or []
     if any(c.function.name == "echo" for c in calls):
@@ -182,10 +184,13 @@ async def _openrouter_check(models: list[str]) -> Check | None:
     )
 
 
-# Errors that will come back on every call: the model id, the key, or the
-# request (tools, params) is wrong. Anything else (rate limits, timeouts, 5xx,
-# dropped connections) may clear by itself, and a run retries those, so it
-# only warns rather than blocking the grid.
+# Errors that will come back on every call: the model id, the key, the
+# account (no credits, no access), or the request (tools, params) is wrong.
+# Anything else (rate limits, timeouts, 5xx, dropped connections) may clear by
+# itself, and a run retries those, so it only warns rather than blocking the
+# grid. litellm maps some statuses to a generic APIError (OpenRouter's 402 and
+# 403, for one), so the HTTP status counts as well as the class name.
+LASTING_STATUS_CODES = frozenset({400, 401, 402, 403, 404, 422})
 LASTING_ERRORS = frozenset(
     {
         "NotFoundError",
@@ -208,7 +213,11 @@ def _round_trip_result(results: list[dict]) -> Check:
             continue
         if status == "error":
             line = f"{r['id']}: {r.get('error')} {r.get('detail', '')}".strip()
-            (failed if r.get("error") in LASTING_ERRORS else warned).append(line)
+            lasting = (
+                r.get("error") in LASTING_ERRORS
+                or r.get("status_code") in LASTING_STATUS_CODES
+            )
+            (failed if lasting else warned).append(line)
         elif status == "text":
             warned.append(f"{r['id']}: wrote the tool call as text")
         else:

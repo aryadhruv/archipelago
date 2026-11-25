@@ -182,3 +182,18 @@ def test_dashboard_runs_one_preflight_at_a_time(monkeypatch):
         assert calls == 2
 
     asyncio.run(go())
+
+
+@pytest.mark.parametrize("code", [402, 403])
+def test_round_trip_lasting_status_fails_whatever_the_class(code):
+    check = preflight._round_trip_result(
+        [{"id": "a", "status": "error", "error": "APIError", "status_code": code}]
+    )
+    assert check.status == "fail"
+
+
+def test_round_trip_server_error_status_warns():
+    check = preflight._round_trip_result(
+        [{"id": "a", "status": "error", "error": "APIError", "status_code": 502}]
+    )
+    assert check.status == "warn"

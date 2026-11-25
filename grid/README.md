@@ -21,8 +21,8 @@ prints only the key names that are missing. For `openrouter/` models it also
 checks OpenRouter's public model list, and fails on a model it no longer
 serves. Then it makes one short call per model through the agent runner
 (same keys, proxy and `extra_args` as a run), asking it to call a dummy tool:
-an error that will repeat (model not found, bad key, no permission, bad
-request) fails the check. A temporary error (rate limit, timeout, 5xx,
+an error that will repeat (model not found, bad key, no credits, no access,
+bad request; HTTP 400, 401, 402, 403, 404 or 422) fails the check. A temporary error (rate limit, timeout, 5xx,
 dropped connection), or a model that writes the call as text or doesn't call
 the tool, is a warning. `--no-keys` skips
 this along with the key check.
