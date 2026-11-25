@@ -156,3 +156,8 @@ what we removed.
 - **Agent timeout fault.** The runner's outer `AGENT_TIMEOUT_SECONDS` timeout now
   records a `budget_exhausted` / `wall_clock` fault, so it can be told apart
   from an infrastructure error.
+- **Unanswered calls after `final_answer`** (`react_toolbelt_agent`).
+  `final_answer` returned early, whether it was accepted or rejected for open
+  todos, so other calls in the same batch got no result and the next request
+  failed with a 400. Each of those calls now gets a "Not run" result asking the
+  model to call it again.

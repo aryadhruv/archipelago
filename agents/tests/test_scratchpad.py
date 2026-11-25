@@ -225,6 +225,34 @@ async def test_note_answered_when_final_answer_is_rejected():
     assert {m.tool_call_id for m in agent.messages} == {"c1", "c2"}
 
 
+@pytest.mark.parametrize("rejected", [True, False])
+async def test_every_call_answered_after_final_answer(rejected):
+    agent = _agent()
+    if rejected:
+        agent.meta_tool_handler.handle(
+            "todo_write",
+            json.dumps(
+                {
+                    "todos": [{"id": "a", "content": "x", "status": "pending"}],
+                    "merge": False,
+                }
+            ),
+        )
+    await agent._handle_tool_calls(
+        None,
+        [
+            _call(1, "todo_write", {"todos": [], "merge": True}),
+            _call(2, "final_answer", {"answer": "done", "status": "completed"}),
+            _call(3, "fs_read", {}),
+            _call(4, "todo_write", {"todos": [], "merge": True}),
+        ],
+    )
+    assert agent._finalized is not rejected
+    assert [m.tool_call_id for m in agent.messages] == ["c1", "c2", "c3", "c4"]
+    assert agent.messages[2].content.startswith("Not run")
+    assert agent.messages[3].content.startswith("Not run")
+
+
 def test_no_duplicate_names_with_a_same_named_mcp_tool():
     agent = _agent(scratchpad=True, use_toolbelt=False)
     clash = {

@@ -83,6 +83,10 @@ MCP_CALL_MAY_HAVE_RUN = (
 # litellm normalizes Gemini MAX_TOKENS and Anthropic max_tokens to "length".
 TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
 NO_TOOL_CALL_MESSAGE = "No tools called. Use final_answer to submit your answer. Please continue completing the task."
+NOT_RUN_MESSAGE = (
+    "Not run: final_answer was called in the same batch. "
+    "Call this tool again if you still need it."
+)
 TRUNCATED_REPLY_MESSAGE = (
     "Your last reply was cut off at the output limit before any tool call "
     "completed, so nothing was run. Do not resend the same large content. "
@@ -503,7 +507,31 @@ class ReActAgent:
         try:
             await self._dispatch_tool_calls(client, tool_calls)
         finally:
+            self._answer_unanswered(start, tool_calls)
             self._restore_call_order(start, tool_calls)
+
+    def _answer_unanswered(self, start: int, tool_calls: list[Any]) -> None:
+        """Give every call in the batch a result.
+
+        final_answer returns early, accepted or rejected, so calls after it
+        would otherwise get none, and most providers reject the next request
+        when a tool call has no result."""
+        answered = {
+            get_msg_attr(m, "tool_call_id")
+            for m in self.messages[start:]
+            if get_msg_attr(m, "role") == "tool"
+        }
+        for tool_call in tool_calls:
+            if tool_call.id in answered:
+                continue
+            self.messages.append(
+                LitellmOutputMessage(
+                    role="tool",
+                    tool_call_id=tool_call.id,
+                    name=tool_call.function.name,
+                    content=NOT_RUN_MESSAGE,
+                )
+            )
 
     def _restore_call_order(self, start: int, tool_calls: list[Any]) -> None:
         """Stable-sort this batch's tool results by call position.
