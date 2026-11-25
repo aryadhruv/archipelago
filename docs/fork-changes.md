@@ -124,14 +124,18 @@ what we removed.
     compaction, since `scratchpad_read` returns them word for word. Scratchpad
     calls in the same batch as `final_answer` are handled first, so they are
     never dropped or left without a tool result.
-  - The judge doesn't see the notes. `output_llm` reads the final answer, the
-    world's file changes and the user and assistant text of the messages;
-    notes are in tool calls and tool results, which it leaves out. A model
-    that repeats its notes in plain text exposes them, as with any text reply.
+  - The grid's judge doesn't see the notes. The grid wires up only
+    `output_llm`, which reads the final answer, the world's file changes and
+    the user and assistant text of the messages; notes are in tool calls and
+    tool results, which it leaves out. A model that repeats its notes in plain
+    text exposes them, as with any text reply. Verifiers that read tool calls
+    (`tool_call_llm_check`, `tool_call_check`, the `db_*_llm_tools` checks,
+    `vca_behavior_llm_check`) would see them if a task used one.
   - Grid: when the agent config turns the scratchpad on (`true` or `"true"`,
     parsed as the agent parses it, and only for `react_toolbelt_agent`), the
     grid adds `defaults/scratchpad_prompt.md` to the system prompt, the same
-    wording for every model.
+    wording for every model. Run Detail shows the notes, and reads them from
+    the event log when the grid killed the agent before it wrote its output.
   - The model is told the scratchpad is private, and nothing in the tool or
     prompt text mentions reviewers or grading, because models change what
     they write when told they're watched. The notes are in fact logged and
@@ -142,8 +146,7 @@ what we removed.
   section asking the model to explain its reasoning in 1-3 sentences before
   each tool call. Models reason before acting anyway, and no model-facing
   text asks for "thinking". The agent README's recommended prompt still has
-  the upstream wording. Run Detail shows the notes, and reads them from
-    the event log when the grid killed the agent before it wrote its output.
+  the upstream wording.
 - **"Working on your own" in the default prompt.** The grid's
   `defaults/system_prompt.md` tells the model that no one replies while it
   works, that the task's files are in the filesystem, and that a file it is
