@@ -172,9 +172,7 @@ def test_dashboard_runs_one_preflight_at_a_time(monkeypatch):
     shared = server.SharedPreflight(grid=None)
 
     async def go():
-        first = await asyncio.gather(
-            shared.get(), shared.get(), shared.get(refresh=True)
-        )
+        first = await asyncio.gather(shared.get(), shared.get(), shared.get())
         assert calls == 1 and all(r["ok"] for r in first)
         await shared.get()  # cached
         assert calls == 1
@@ -197,3 +195,57 @@ def test_round_trip_server_error_status_warns():
         [{"id": "a", "status": "error", "error": "APIError", "status_code": 502}]
     )
     assert check.status == "warn"
+
+
+def test_dashboard_refresh_during_a_run_runs_again(monkeypatch):
+    from grid import server
+
+    calls = 0
+
+    async def fake_run_preflight(grid):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.05)
+        return [preflight.Check("x", "x", "pass")]
+
+    monkeypatch.setattr(server, "run_preflight", fake_run_preflight)
+    shared = server.SharedPreflight(grid=None)
+
+    async def go():
+        first = asyncio.ensure_future(shared.get())
+        await asyncio.sleep(0.01)
+        # Two refreshes while the first run is going: one new run after it.
+        await asyncio.gather(shared.get(refresh=True), shared.get(refresh=True))
+        await first
+        assert calls == 2
+
+    asyncio.run(go())
+
+
+def test_dashboard_preflight_error_reaches_waiters_and_next_call_retries(
+    monkeypatch,
+):
+    from grid import server
+
+    calls = 0
+
+    async def fake_run_preflight(grid):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+        if calls == 1:
+            raise RuntimeError("docker down")
+        return [preflight.Check("x", "x", "pass")]
+
+    monkeypatch.setattr(server, "run_preflight", fake_run_preflight)
+    shared = server.SharedPreflight(grid=None)
+
+    async def go():
+        results = await asyncio.gather(
+            shared.get(), shared.get(), return_exceptions=True
+        )
+        assert all(isinstance(r, RuntimeError) for r in results)
+        assert (await shared.get())["ok"]
+        assert calls == 2
+
+    asyncio.run(go())

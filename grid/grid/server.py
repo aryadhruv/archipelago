@@ -201,12 +201,28 @@ class SharedPreflight:
         self._task: asyncio.Task[None] | None = None
 
     async def get(self, refresh: bool = False) -> dict[str, Any]:
-        if self._task is None and (refresh or not self.result):
-            self._task = asyncio.ensure_future(self._run())
+        running = self._task
+        if refresh and running is not None:
+            # That run may predate the fix being checked (an edited .env), so
+            # wait for it, then run again. The first refresher back starts the
+            # new run; the others that waited join it.
+            with contextlib.suppress(Exception):
+                await asyncio.shield(running)
+            if self._task is None:
+                self._start()
+        elif self._task is None and (refresh or not self.result):
+            self._start()
         if self._task is not None:
             # Shielded: a client that disconnects doesn't cancel it for the others.
             await asyncio.shield(self._task)
         return self.result
+
+    def _start(self) -> None:
+        task = asyncio.ensure_future(self._run())
+        # Mark a failure as seen even if every client left, so asyncio doesn't
+        # log "Task exception was never retrieved"; waiters still get it.
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())
+        self._task = task
 
     async def _run(self) -> None:
         try:
