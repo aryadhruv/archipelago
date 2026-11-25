@@ -52,6 +52,7 @@ from runner.utils.mcp import (
     mcp_call_never_sent,
     probe_gateway_health,
     reconnect_mcp_session,
+    shorten_error_content,
 )
 from runner.utils.sandbox_files import SandboxUploadError
 from runner.utils.settings import get_settings
@@ -752,6 +753,8 @@ class ReActAgent:
             payload=[block.model_dump() for block in tool_content],
         ).info(f"Tool {name} called successfully")
 
+        # After logging, so the event log keeps the full error.
+        tool_content = shorten_error_content(result, tool_content)
         messages = content_blocks_to_messages(
             tool_content,
             tool_call.id,

@@ -343,6 +343,45 @@ EMPTY_TOOL_RESULT_TEXT = "Tool returned an empty result."
 EMPTY_TOOL_ERROR_TEXT = "Error: tool reported an error with no content."
 
 
+# An error line longer than this is cut to its start and end. Argument
+# validation errors print each bad key in full, and a malformed call can turn
+# a whole CSV into one key; the rest of the error still needs to be readable.
+ERROR_LINE_MAX_CHARS = 500
+_ERROR_LINE_HEAD = 200
+_ERROR_LINE_TAIL = 100
+
+
+def shorten_error_lines(text: str) -> str:
+    """Cut each over-long line to its start and end; keep every line.
+
+    Only for tool errors: the error type, field names and messages stay
+    readable, and the note says how much was cut, so nothing is hidden."""
+    lines = []
+    for line in text.split("\n"):
+        if len(line) > ERROR_LINE_MAX_CHARS:
+            cut = len(line) - _ERROR_LINE_HEAD - _ERROR_LINE_TAIL
+            line = (
+                f"{line[:_ERROR_LINE_HEAD]} [... {cut} characters cut ...] "
+                f"{line[-_ERROR_LINE_TAIL:]}"
+            )
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def shorten_error_content(
+    result: Any, content: list[ContentBlock]
+) -> list[ContentBlock]:
+    """For an ``isError`` result, shorten over-long lines in its text blocks."""
+    if getattr(result, "isError", False) is not True:
+        return content
+    return [
+        TextContent(type="text", text=shorten_error_lines(block.text))
+        if isinstance(block, TextContent)
+        else block
+        for block in content
+    ]
+
+
 def empty_tool_result_content(
     result: Any, name: str, tool_logger: Any
 ) -> list[ContentBlock]:
