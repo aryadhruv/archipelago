@@ -1438,13 +1438,38 @@ def _build_proxy(
 ) -> FastMCP:
     """Build the gateway proxy, honoring the env read-timeout when set.
 
-    Default (env unset) is byte-identical to `FastMCP.as_proxy(config_dict)`.
-    When the env timeout is set we build the same proxy explicitly so the
-    upstream `ProxyClient` carries a `timeout` (→ `read_timeout_seconds`),
-    which is the only knob FastMCP 3.x actually applies to the upstream read.
+    A single server with the env unset is byte-identical to
+    `FastMCP.as_proxy(config_dict)`. When the env timeout is set we build the
+    same proxy explicitly so the upstream `ProxyClient` carries a `timeout`
+    (→ `read_timeout_seconds`), the only knob FastMCP 3.x applies to the read.
     """
     middleware = _gateway_middleware(alias_middleware, disable_middleware)
     timeout = _proxy_read_timeout_seconds()
+    servers = config_dict["mcpServers"]
+    if len(servers) >= 2:
+        # fastmcp's multi-server transport restarts every backend on each session.
+        # One single-server proxy per backend keeps each stdio process running.
+        clients = [
+            (name, ProxyClient({"mcpServers": {name: cfg}}, timeout=timeout))
+            for name, cfg in servers.items()
+        ]
+
+        @contextlib.asynccontextmanager
+        async def _close_backends(_server: FastMCP) -> Any:
+            # Nothing else stops the kept-alive processes when a swap retires this gateway.
+            try:
+                yield {}
+            finally:
+                for _, client in clients:
+                    with contextlib.suppress(Exception):
+                        await client.transport.close()
+
+        composite = FastMCP(
+            name="Gateway", middleware=middleware, lifespan=_close_backends
+        )
+        for name, client in clients:
+            composite.mount(create_proxy(client, name=f"Proxy-{name}"), namespace=name)
+        return composite
     if timeout is None:
         return FastMCP.as_proxy(config_dict, name="Gateway", middleware=middleware)
 
