@@ -34,8 +34,7 @@ are known to break there:
 
 - Grading imports the Unix-only `resource` module
   (`grading/runner/utils/metrics.py`, `evals/llm_code_verifier/main.py`).
-- Each model's `id` becomes a folder name as is, so an `id` with `:` (for
-  example `...:free`) is not a valid path on Windows.
+- Killing a timed-out preflight probe uses Unix process groups (`os.killpg`).
 - Three grid tests fail on Windows only (CRLF line endings, backslash paths,
   `SIGKILL`).
 
