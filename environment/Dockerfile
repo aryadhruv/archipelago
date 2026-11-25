@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# An https:// APT_MIRROR needs a base image with CA certificates.
+# APT_MIRROR must serve /debian and /debian-security; https needs CA certs in the base.
 ARG BASE_IMAGE=debian:trixie-slim
 FROM ${BASE_IMAGE}
 
@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
  && rm -f /etc/apt/apt.conf.d/docker-clean \
  && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
  && if [ -n "$APT_MIRROR" ]; then \
-      sed -i "s|http://deb.debian.org|${APT_MIRROR%/}|g" /etc/apt/sources.list.d/debian.sources; \
+      sed -i "s|http://deb.debian.org|${APT_MIRROR%/}|g" /etc/apt/sources.list.d/debian.sources || exit 1; \
     fi \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -31,7 +31,8 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
 # Install uv (Python package/dependency manager)
 RUN python3 -m pip install --no-cache-dir --break-system-packages uv==0.13.4
 
-# Server venvs have no dev groups; UV_NO_SYNC keeps `uv run` from adding them.
+# Server venvs have no dev groups; UV_NO_SYNC keeps a shell `uv run` from adding
+# them. The gateway passes servers only their config `env`, so set it there too.
 ENV UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     UV_NO_SYNC=1
@@ -59,7 +60,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.npm \
     set -eu \
  && for server in documents calendar mail presentations chat filesystem pdfs spreadsheets; do \
-      ( cd "/app/mcp_servers/$server" && uv sync --locked --no-dev --all-extras ); \
+      ( cd "/app/mcp_servers/$server" && uv sync --locked --no-dev --all-extras ) || exit 1; \
     done \
  && cd /app/mcp_servers/code \
  && mkdir -p /app/lib \

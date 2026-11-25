@@ -185,18 +185,23 @@ what we removed.
     re-locking them silently. They're refreshed, with no version changes.
   - Server venvs skip their dev groups (basedpyright and its bundled Node,
     ruff, pytest). The runner's venv keeps them, because `runner/utils/s3.py`
-    imports `types_aiobotocore_s3` at runtime. `UV_NO_SYNC=1` stops `uv run`
-    from installing them back at runtime.
+    imports `types_aiobotocore_s3` at runtime. The image sets `UV_NO_SYNC=1`,
+    but the gateway passes a stdio server only its config `env`, so a config
+    that starts servers with `uv run` must set `UV_NO_SYNC` there too (as
+    `examples/hugging_face_task` does). Otherwise uv reinstalls the dev
+    groups when the server starts.
   - The uv, npm and apt caches are cache mounts, so they stay out of the
     image; uv's cache alone was 3 GB. All apt packages install in one step.
   - The server venvs and the code sandbox mirror install in one step that
     ends with `hardlink`, so identical files are stored once (about 4.5 GB).
-  - The code step's `;` chain is now `&&`, so a failed `sandbox_fs.so` compile
-    fails the build. The unused GitHub-token secret is gone.
+  - A failed step now fails the build: the code step's `;` chain is now `&&`,
+    and each server sync in the loop exits on error. The unused GitHub-token secret is gone.
   - New build args `BASE_IMAGE` and `APT_MIRROR` (also read from the
     environment by `docker compose`) let restricted networks use a registry
-    or apt mirror. An `https://` mirror needs a base image with CA
-    certificates.
+    or apt mirror. The mirror must serve `/debian` and `/debian-security`, and
+    an `https://` mirror needs a base image with CA certificates. The mirror
+    URL is visible in `docker history`. The grid's image tag hashes only the
+    source trees, so pass `--rebuild` after changing either.
 
 - **`read_image_file`** detects PNG, JPEG, GIF and WebP from the file's bytes, not
   its extension, so a misnamed JPEG is no longer sent as `image/png`.

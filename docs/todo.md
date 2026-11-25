@@ -107,6 +107,9 @@ First round done (see `fork-changes.md`). Still open:
 
 ### Small fixes
 
+- **Mail `list` fails output validation** (`None is not of type 'object'`),
+  on images both before and after the build cleanup.
+
 - Optional: bind the environment port to `127.0.0.1` in
   `environment/docker-compose.yml`, so the sandbox isn't reachable from the
   network.
