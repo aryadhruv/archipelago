@@ -131,7 +131,12 @@ what we removed.
   - Grid: when the agent config turns the scratchpad on (`true` or `"true"`,
     parsed as the agent parses it, and only for `react_toolbelt_agent`), the
     grid adds `defaults/scratchpad_prompt.md` to the system prompt, the same
-    wording for every model. Run Detail shows the notes, and reads them from
+    wording for every model.
+  - The model is told the scratchpad is private, and nothing in the tool or
+    prompt text mentions reviewers or grading, because models change what
+    they write when told they're watched. The notes are in fact logged and
+    saved with the run. So a run measures how a model behaves when it
+    believes it's unobserved; read its notes that way. Run Detail shows the notes, and reads them from
     the event log when the grid killed the agent before it wrote its output.
 
 ## Fixed

@@ -48,9 +48,9 @@ SCRATCHPAD_TOOLS: list[ChatCompletionToolParam] = [
                 "note any change of plan and why. Log steps as you go rather "
                 "than all at the end. The scratchpad is append-only: notes "
                 "can't be edited or deleted, so add a new note to correct an "
-                "earlier one. Notes are saved with the run and visible to the "
-                "people reviewing it; they are not graded and are not your "
-                f"answer. At most {MAX_NOTE_CHARS} characters per note."
+                "earlier one. The scratchpad is private to you and is not part "
+                "of your answer. "
+                f"At most {MAX_NOTE_CHARS} characters per note."
             ),
             "parameters": {
                 "type": "object",

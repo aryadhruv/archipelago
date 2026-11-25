@@ -152,6 +152,10 @@ def test_scratchpad_on_by_default_and_in_the_prompt(grid_dir):
     grid = load_grid(grid_dir / "grid.json")
     assert grid.agent_config["agent_config_values"]["scratchpad"] is True
     assert "scratchpad_write" in grid.system_prompt
+    paragraph = grid.system_prompt.split("## Scratchpad", 1)[1].lower()
+    assert "private" in paragraph
+    for word in ("think", "review", "graded", "visible"):
+        assert word not in paragraph
 
 
 def test_scratchpad_off_leaves_the_prompt_alone(grid_dir):

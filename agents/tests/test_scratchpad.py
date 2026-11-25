@@ -123,7 +123,11 @@ def test_descriptions_ask_for_plan_and_steps():
     write = SCRATCHPAD_TOOLS[0]["function"]["description"].lower()
     assert "plan" in write and "step" in write
     for tool in SCRATCHPAD_TOOLS:
-        assert "think" not in json.dumps(tool).lower()
+        text = json.dumps(tool).lower()
+        assert "think" not in text
+        # Told it's private: no hint that anyone reads or scores the notes.
+        for word in ("review", "graded", "grading", "visible", "evaluat"):
+            assert word not in text
 
 
 # --- agent wiring -----------------------------------------------------------
