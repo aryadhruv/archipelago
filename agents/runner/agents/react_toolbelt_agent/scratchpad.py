@@ -69,7 +69,7 @@ SCRATCHPAD_TOOLS: list[ChatCompletionToolParam] = [
         "function": {
             "name": SCRATCHPAD_READ,
             "description": (
-                "Read your scratchpad notes, oldest first, to review your plan "
+                "Read your scratchpad notes, oldest first, to look back over your plan "
                 "and the steps so far, for example after your context has "
                 "been summarized or before submitting your answer."
             ),
