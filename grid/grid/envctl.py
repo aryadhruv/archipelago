@@ -60,6 +60,9 @@ async def run_cmd(
             # zombies left (PermissionError): nothing left to kill either way.
             with contextlib.suppress(OSError):
                 os.killpg(proc.pid, signal.SIGKILL)
+            # Reap it so its pipe and transport close now, not at shutdown.
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(proc.wait(), 5)
         raise
     return proc.returncode or 0, out.decode(errors="replace")
 
