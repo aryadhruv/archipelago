@@ -161,3 +161,6 @@ what we removed.
   todos, so other calls in the same batch got no result and the next request
   failed with a 400. Each of those calls now gets a "Not run" result asking the
   model to call it again.
+- **Run Detail on odd event-log lines** (grid). A line in `agent_events.jsonl`
+  whose `extra` wasn't an object made the scratchpad fallback raise, and Run
+  Detail returned 500. Such lines are now skipped.
