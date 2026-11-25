@@ -518,6 +518,10 @@ class ReActAgent:
         final_answer returns early, accepted or rejected, so calls after it
         would otherwise get none, and most providers reject the next request
         when a tool call has no result."""
+        if not any(tc.function.name == "final_answer" for tc in tool_calls):
+            # Only final_answer leaves calls unanswered, and NOT_RUN_MESSAGE
+            # names it as the reason.
+            return
         answered = {
             get_msg_attr(m, "tool_call_id")
             for m in self.messages[start:]

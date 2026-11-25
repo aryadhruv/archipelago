@@ -274,6 +274,19 @@ async def test_no_not_run_filler_when_dispatch_raises(monkeypatch):
     assert [m.tool_call_id for m in agent.messages] == ["c1"]
 
 
+async def test_no_not_run_filler_without_final_answer(monkeypatch):
+    agent = _agent()
+
+    async def drop(client, tool_call, deferred):
+        pass  # a path that, wrongly, gives no result
+
+    monkeypatch.setattr(agent, "_execute_mcp_tool", drop)
+    agent.all_tools["fs_read"] = {"type": "function", "function": {"name": "fs_read"}}
+    agent.toolbelt.add("fs_read")
+    await agent._handle_tool_calls(None, [_call(1, "fs_read", {})])
+    assert agent.messages == []
+
+
 def test_no_duplicate_names_with_a_same_named_mcp_tool():
     agent = _agent(scratchpad=True, use_toolbelt=False)
     clash = {
