@@ -21,6 +21,18 @@ prints only the key names that are missing. For `openrouter/` models it also
 checks OpenRouter's public model list, and fails on a model it no longer
 serves.
 
+### Platform
+
+Grids run on Linux (and macOS for local work). Windows is untested, and these
+are known to break there:
+
+- Grading imports the Unix-only `resource` module
+  (`grading/runner/utils/metrics.py`, `evals/llm_code_verifier/main.py`).
+- Each model's `id` becomes a folder name as is, so an `id` with `:` (for
+  example `...:free`) is not a valid path on Windows.
+- Three grid tests fail on Windows only (CRLF line endings, backslash paths,
+  `SIGKILL`).
+
 ## Inputs
 
 Tasks use the layout of the HuggingFace `mercor/apex-agents` dataset:
