@@ -35,8 +35,9 @@ are known to break there:
 - Grading imports the Unix-only `resource` module
   (`grading/runner/utils/metrics.py`, `evals/llm_code_verifier/main.py`).
 - Killing a timed-out preflight probe uses Unix process groups (`os.killpg`).
-- Three grid tests fail on Windows only (CRLF line endings, backslash paths,
-  `SIGKILL`).
+- Four grid tests fail on Windows only (CRLF line endings, backslash paths,
+  `SIGKILL`, and the probe-kill test, which uses `sh`, `ps` and process
+  groups).
 
 ## Inputs
 
