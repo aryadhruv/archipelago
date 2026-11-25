@@ -153,6 +153,11 @@ what we removed.
   asked for must be created with a tool. Models stopped to ask for
   confirmation, or pasted a deliverable into chat, and ended the run with
   nothing saved.
+- **Round-trip preflight** (grid). After the key and OpenRouter checks pass,
+  `validate`, `run` and the dashboard's preflight make one short call per
+  model through the agent runner, asking it to call a dummy tool. An error
+  fails preflight; writing the call as text, not calling the tool, or a rate
+  limit is a warning.
 
 ## Fixed
 

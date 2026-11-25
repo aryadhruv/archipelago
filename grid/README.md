@@ -19,7 +19,11 @@ simulated human (`human`, below), from `agents/.env`. The grid itself never
 reads keys. `validate` asks each runner whether its keys are present and
 prints only the key names that are missing. For `openrouter/` models it also
 checks OpenRouter's public model list, and fails on a model it no longer
-serves.
+serves. Then it makes one short call per model through the agent runner
+(same keys, proxy and `extra_args` as a run), asking it to call a dummy tool:
+a model that errors fails the check, and one that writes the call as text or
+doesn't call the tool, or hits a rate limit, is a warning. `--no-keys` skips
+this along with the key check.
 
 ### Platform
 

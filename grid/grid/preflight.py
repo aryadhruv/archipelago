@@ -1,6 +1,7 @@
 """Checks to pass before launching a grid. Each is pass, warn or fail."""
 
 import asyncio
+import json
 import zipfile
 from dataclasses import asdict, dataclass
 
@@ -24,6 +25,49 @@ _KEY_CHECK = (
 # OpenRouter's public model list. A model it no longer serves returns 404 on
 # every call, which the grid would otherwise retry as an agent error.
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+
+
+# One short call per model, through the agent runner's own LLM path (keys,
+# proxy routing, extra_args), with one tool it is asked to call. Catches models
+# that 404, reject tools, or write the call as text instead of making it,
+# before a grid spends its runs on them. Prints one ROUND_TRIP line of JSON.
+_ROUND_TRIP = """
+import asyncio, json, sys
+from runner.utils.env_file import load_env_file
+load_env_file()
+from runner.utils.llm import generate_response
+
+TOOL = {"type": "function", "function": {
+    "name": "echo",
+    "description": "Echo the given text back.",
+    "parameters": {"type": "object", "properties": {"text": {"type": "string"}},
+                   "required": ["text"]}}}
+PROMPT = "Call the echo tool with text set to ok. Do not reply in text."
+
+async def probe(spec):
+    try:
+        response = await generate_response(
+            spec["model"], [{"role": "user", "content": PROMPT}], [TOOL],
+            90, spec.get("extra_args") or {}, max_attempts=2)
+    except Exception as e:
+        return {"id": spec["id"], "status": "error",
+                "error": type(e).__name__, "detail": str(e)[:200]}
+    message = response.choices[0].message if response.choices else None
+    calls = getattr(message, "tool_calls", None) or []
+    if any(c.function.name == "echo" for c in calls):
+        return {"id": spec["id"], "status": "ok"}
+    text = getattr(message, "content", None) or ""
+    return {"id": spec["id"], "status": "text" if "echo" in text else "no_call",
+            "detail": text[:120]}
+
+async def main():
+    specs = json.loads(sys.argv[1])
+    results = await asyncio.gather(*(probe(s) for s in specs))
+    print("ROUND_TRIP " + json.dumps(results))
+
+asyncio.run(main())
+"""
+ROUND_TRIP_TIMEOUT_SEC = 300
 
 
 @dataclass
@@ -138,6 +182,60 @@ async def _openrouter_check(models: list[str]) -> Check | None:
     )
 
 
+def _round_trip_result(results: list[dict]) -> Check:
+    """Fail on a model that errors; warn on one that didn't call the tool.
+
+    A rate limit is only a warning: free models hit them, and a run retries."""
+    label = "Every model answers a call and calls a tool"
+    failed, warned = [], []
+    for r in results:
+        status = r.get("status")
+        if status == "ok":
+            continue
+        if status == "error":
+            line = f"{r['id']}: {r.get('error')} {r.get('detail', '')}".strip()
+            (warned if r.get("error") == "RateLimitError" else failed).append(line)
+        elif status == "text":
+            warned.append(f"{r['id']}: wrote the tool call as text")
+        else:
+            warned.append(f"{r['id']}: didn't call the tool")
+    status = "fail" if failed else "warn" if warned else "pass"
+    return Check("round_trip", label, status, "; ".join(failed + warned))
+
+
+async def _round_trip_check(grid: Grid) -> Check:
+    specs = [
+        {"id": m.id, "model": m.model, "extra_args": m.extra_args} for m in grid.models
+    ]
+    label = "Every model answers a call and calls a tool"
+    try:
+        code, out = await asyncio.wait_for(
+            run_cmd(
+                "uv",
+                "run",
+                "--locked",
+                "python",
+                "-c",
+                _ROUND_TRIP,
+                json.dumps(specs),
+                cwd=AGENTS_DIR,
+            ),
+            ROUND_TRIP_TIMEOUT_SEC,
+        )
+    except TimeoutError:
+        return Check(
+            "round_trip", label, "warn", f"no answer in {ROUND_TRIP_TIMEOUT_SEC}s"
+        )
+    for line in reversed(out.splitlines()):
+        if line.startswith("ROUND_TRIP "):
+            try:
+                return _round_trip_result(json.loads(line.removeprefix("ROUND_TRIP ")))
+            except (ValueError, KeyError, TypeError):
+                break
+    tail = (out.strip().splitlines() or [""])[-1][-300:]
+    return Check("round_trip", label, "warn", f"probe didn't finish ({code}): {tail}")
+
+
 async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
     checks = _inputs_checks(grid) + _model_checks(grid)
 
@@ -148,14 +246,13 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
         checks.append(Check("docker", "Docker is running", "fail", str(e)[-300:]))
 
     if check_keys:
-        checks.append(
-            await _key_check(
-                "agent_keys",
-                "Provider keys or proxy for the models (agents/.env)",
-                AGENTS_DIR,
-                [m.model for m in grid.models],
-            )
+        agent_keys = await _key_check(
+            "agent_keys",
+            "Provider keys or proxy for the models (agents/.env)",
+            AGENTS_DIR,
+            [m.model for m in grid.models],
         )
+        checks.append(agent_keys)
         checks.append(
             await _key_check(
                 "judge_key",
@@ -179,8 +276,14 @@ async def run_preflight(grid: Grid, check_keys: bool = True) -> list[Check]:
         ]
         if grid.human is not None:
             models.append(grid.human.model)
-        if check := await _openrouter_check(models):
-            checks.append(check)
+        openrouter = await _openrouter_check(models)
+        if openrouter:
+            checks.append(openrouter)
+        # Only worth the calls once the keys are there and every model is served.
+        if agent_keys.status == "pass" and (
+            openrouter is None or openrouter.status != "fail"
+        ):
+            checks.append(await _round_trip_check(grid))
     return checks
 
 

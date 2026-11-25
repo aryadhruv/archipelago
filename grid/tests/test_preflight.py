@@ -48,3 +48,58 @@ def test_unreachable_list_only_warns(monkeypatch):
 
     _serve(monkeypatch, down)
     assert _check(["openrouter/vendor/live:free"]).status == "warn"
+
+
+def test_round_trip_all_ok():
+    check = preflight._round_trip_result([{"id": "a", "status": "ok"}])
+    assert check.status == "pass"
+
+
+def test_round_trip_error_fails():
+    check = preflight._round_trip_result(
+        [
+            {"id": "a", "status": "ok"},
+            {"id": "b", "status": "error", "error": "NotFoundError", "detail": "404"},
+        ]
+    )
+    assert check.status == "fail"
+    assert check.detail == "b: NotFoundError 404"
+
+
+@pytest.mark.parametrize(
+    ("result", "detail"),
+    [
+        ({"status": "text"}, "a: wrote the tool call as text"),
+        ({"status": "no_call"}, "a: didn't call the tool"),
+        ({"status": "error", "error": "RateLimitError"}, "a: RateLimitError"),
+    ],
+)
+def test_round_trip_warnings(result, detail):
+    check = preflight._round_trip_result([{"id": "a", **result}])
+    assert check.status == "warn"
+    assert check.detail == detail
+
+
+def test_round_trip_probe_output_parsed(monkeypatch):
+    from grid.inputs import Model
+
+    async def fake_run_cmd(*args, cwd=None, env=None):
+        assert args[-2] == preflight._ROUND_TRIP
+        return 0, 'log noise\nROUND_TRIP [{"id": "m", "status": "ok"}]\n'
+
+    monkeypatch.setattr(preflight, "run_cmd", fake_run_cmd)
+    grid = type("G", (), {"models": [Model("m", "openrouter/x/y", 1000)]})()
+    assert asyncio.run(preflight._round_trip_check(grid)).status == "pass"
+
+
+def test_round_trip_probe_crash_warns(monkeypatch):
+    from grid.inputs import Model
+
+    async def fake_run_cmd(*args, cwd=None, env=None):
+        return 1, "Traceback...\nImportError: boom"
+
+    monkeypatch.setattr(preflight, "run_cmd", fake_run_cmd)
+    grid = type("G", (), {"models": [Model("m", "openrouter/x/y", 1000)]})()
+    check = asyncio.run(preflight._round_trip_check(grid))
+    assert check.status == "warn"
+    assert "ImportError: boom" in check.detail
