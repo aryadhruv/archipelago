@@ -189,6 +189,12 @@ what we removed.
   todos, so other calls in the same batch got no result and the next request
   failed with a 400. Each of those calls now gets a "Not run" result asking the
   model to call it again.
+- **Calls before `final_answer` dropped** (`react_toolbelt_agent`). MCP calls
+  run after the batch loop, and `final_answer` returned before it, so in
+  `[write a file, final_answer]` the write never ran: the answer was accepted,
+  the run ended without the file, and the model was scored as if it hadn't
+  done the work. Calls before `final_answer` in a batch now run first; only
+  calls after it get "Not run".
 - **Run Detail on odd event-log lines** (grid). A line in `agent_events.jsonl`
   whose `extra` wasn't an object made the scratchpad fallback raise, and Run
   Detail returned 500. Such lines are now skipped.

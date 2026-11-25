@@ -253,6 +253,51 @@ async def test_every_call_answered_after_final_answer(rejected):
     assert agent.messages[3].content.startswith("Not run")
 
 
+@pytest.mark.parametrize("rejected", [True, False])
+async def test_calls_before_final_answer_run_first(monkeypatch, rejected):
+    agent = _agent()
+    if rejected:
+        agent.meta_tool_handler.handle(
+            "todo_write",
+            json.dumps(
+                {
+                    "todos": [{"id": "a", "content": "x", "status": "pending"}],
+                    "merge": False,
+                }
+            ),
+        )
+    ran = []
+
+    async def fake_mcp(client, tool_call, deferred):
+        ran.append(tool_call.id)
+        assert not agent._finalized  # the write lands before the run ends
+        agent.messages.append(
+            LitellmOutputMessage(
+                role="tool",
+                tool_call_id=tool_call.id,
+                name=tool_call.function.name,
+                content="written",
+            )
+        )
+
+    monkeypatch.setattr(agent, "_execute_mcp_tool", fake_mcp)
+    agent.all_tools["fs_write"] = {"type": "function", "function": {"name": "fs_write"}}
+    agent.toolbelt.add("fs_write")
+    await agent._handle_tool_calls(
+        None,
+        [
+            _call(1, "fs_write", {}),
+            _call(2, "final_answer", {"answer": "done", "status": "completed"}),
+            _call(3, "fs_write", {}),
+        ],
+    )
+    assert ran == ["c1"]
+    assert agent._finalized is not rejected
+    assert [m.tool_call_id for m in agent.messages] == ["c1", "c2", "c3"]
+    assert agent.messages[0].content == "written"
+    assert agent.messages[2].content.startswith("Not run")
+
+
 async def test_no_not_run_filler_when_dispatch_raises(monkeypatch):
     agent = _agent()
 
