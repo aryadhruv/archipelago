@@ -72,3 +72,23 @@ def structured_tool(
         )
 
     return wrapper
+
+
+def model_tool(
+    fn: Callable[..., Awaitable[BaseModel]],
+) -> Callable[..., Awaitable[ToolResult]]:
+    """Wrap a tool that returns a model, as the meta-tool does.
+
+    The text is the model's JSON as before; the structured content drops
+    ``None`` values so it validates against the flattened ``outputSchema``.
+    """
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> ToolResult:
+        result = await fn(*args, **kwargs)
+        return ToolResult(
+            content=[TextContent(type="text", text=result.model_dump_json())],
+            structured_content=structured_content(result),
+        )
+
+    return wrapper

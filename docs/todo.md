@@ -97,10 +97,10 @@ First round done (see `fork-changes.md`). Still open:
 
 ### Gateway and server runtime
 
-- **Mail meta-tool returns an error on every call.** `main.py` flattens the
-  output schema (`X | None` becomes `X`), but `MailOutput` is sent with its
-  unused fields as `null`, so every call fails output validation (`None is not
-  of type 'object'`) after the action has run: a sent mail reports failure.
+- **The judge can't see sent mail.** The snapshot diff lists
+  `.apps_data/mail/sent.mbox` as created but shows none of its content, so a
+  rubric line about the body or recipients fails even when the mail is right.
+  Extract new mbox messages (headers and body) into the diff the judge sees.
 - **`POST /apps` mid-run kills live sessions.** The call in flight hangs
   until its 120 s timeout instead of failing with a clear error.
 - **Path checks order** (`mcp_actor/paths.py`, `_dealias_root_prefix` in the

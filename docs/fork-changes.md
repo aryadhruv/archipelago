@@ -175,6 +175,13 @@ what we removed.
 
 ## Fixed
 
+- **Mail meta-tool errored on every call** (mail server). `main.py` flattens
+  each tool's output schema, so `MailOutput`'s optional fields became required
+  objects, while the meta-tool's structured content carried them as `null`.
+  Every action ran and then failed output validation (`None is not of type
+  'object'`), so a sent mail reported failure. The meta-tool is now registered
+  like the individual tools: the same JSON text, with `None` values dropped
+  from the structured content.
 - **MCP servers restarted on every call** (gateway). With two or more servers,
   fastmcp's multi-server transport stopped and restarted every backend on each
   new client session, and the gateway opens one per request, so each tool call
