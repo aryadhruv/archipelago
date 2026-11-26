@@ -19,6 +19,7 @@ from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
 from fastmcp import Client as FastMCPClient
 from fastmcp import FastMCP
+from fastmcp.client.transports import StdioTransport
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.server.providers.proxy import ProxyClient, StatefulProxyClient
@@ -1431,6 +1432,25 @@ def _gateway_middleware(
     ]
 
 
+def _serialize_stdio_connect(client: ProxyClient) -> None:
+    """Let one call at a time (re)start a backend's stdio process.
+
+    fastmcp's StdioTransport.connect has no lock: after a backend dies, each
+    concurrent call starts its own process and all but the last are orphaned.
+    """
+    transport = getattr(client.transport, "transport", None)
+    if not isinstance(transport, StdioTransport):
+        return
+    connect = transport.connect
+    lock = asyncio.Lock()
+
+    async def locked_connect(**session_kwargs: Any) -> Any:
+        async with lock:
+            return await connect(**session_kwargs)
+
+    transport.connect = locked_connect  # pyright: ignore[reportAttributeAccessIssue]
+
+
 def _build_proxy(
     config_dict: dict[str, Any],
     alias_middleware: _ToolAliasMiddleware | None = None,
@@ -1453,6 +1473,8 @@ def _build_proxy(
             (name, ProxyClient({"mcpServers": {name: cfg}}, timeout=timeout))
             for name, cfg in servers.items()
         ]
+        for _, client in clients:
+            _serialize_stdio_connect(client)
 
         @contextlib.asynccontextmanager
         async def _close_backends(_server: FastMCP) -> Any:
@@ -1460,9 +1482,10 @@ def _build_proxy(
             try:
                 yield {}
             finally:
-                for _, client in clients:
-                    with contextlib.suppress(Exception):
-                        await client.transport.close()
+                _ = await asyncio.gather(
+                    *(client.transport.close() for _, client in clients),
+                    return_exceptions=True,
+                )
 
         composite = FastMCP(
             name="Gateway", middleware=middleware, lifespan=_close_backends

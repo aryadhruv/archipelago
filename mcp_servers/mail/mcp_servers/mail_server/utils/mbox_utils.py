@@ -1,3 +1,4 @@
+import fcntl
 import mailbox
 import os
 import re
@@ -48,28 +49,37 @@ def _thread_lock_for(path: str) -> threading.Lock:
         return _thread_locks.setdefault(key, threading.Lock())
 
 
-def _remove_stale_dot_lock(path: str) -> None:
-    dot_lock = path + ".lock"
+def _remove_stale_dot_lock(box: mailbox.mbox, path: str) -> None:
+    # mailbox takes lockf before the dot-lock, so while we hold lockf no live
+    # process can be creating one: an old dot-lock is left by a killed process.
     try:
-        age = time.time() - os.path.getmtime(dot_lock)
+        fcntl.lockf(box._file, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         return
-    if age > STALE_LOCK_SEC:
-        logger.warning(f"Removing stale mbox lock {dot_lock} ({age:.0f}s old)")
+    try:
+        dot_lock = path + ".lock"
         try:
-            os.remove(dot_lock)
+            age = time.time() - os.path.getmtime(dot_lock)
         except OSError:
-            pass
+            return
+        if age > STALE_LOCK_SEC:
+            logger.warning(f"Removing stale mbox lock {dot_lock} ({age:.0f}s old)")
+            try:
+                os.remove(dot_lock)
+            except OSError:
+                pass
+    finally:
+        fcntl.lockf(box._file, fcntl.LOCK_UN)
 
 
 @contextmanager
 def locked_mbox(box: mailbox.mbox, path: str) -> Iterator[mailbox.mbox]:
-    """Lock an mbox, waiting up to LOCK_TIMEOUT_SEC (threads first, then processes)."""
+    """Lock an mbox, waiting up to LOCK_TIMEOUT_SEC in all (threads, then processes)."""
+    deadline = time.monotonic() + LOCK_TIMEOUT_SEC
     thread_lock = _thread_lock_for(path)
-    if not thread_lock.acquire(timeout=LOCK_TIMEOUT_SEC):
+    if not thread_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
         raise MailboxBusy(path)
     try:
-        deadline = time.monotonic() + LOCK_TIMEOUT_SEC
         delay = 0.01
         while True:
             try:
@@ -78,7 +88,8 @@ def locked_mbox(box: mailbox.mbox, path: str) -> Iterator[mailbox.mbox]:
             except (mailbox.ExternalClashError, BlockingIOError, FileExistsError) as e:
                 if time.monotonic() >= deadline:
                     raise MailboxBusy(path) from e
-                _remove_stale_dot_lock(path)
+                if str(e).startswith("dot lock unavailable"):
+                    _remove_stale_dot_lock(box, path)
                 time.sleep(delay)
                 delay = min(delay * 2, 0.2)
         try:

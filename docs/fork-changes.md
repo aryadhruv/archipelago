@@ -189,17 +189,24 @@ what we removed.
   gateway now mounts one single-server proxy per backend, which keeps each stdio
   process running (about 0.01 s per call). Tool names are unchanged
   (`<server>_<tool>`). A lifespan on the gateway closes the backends when a
-  swap retires it, since nothing else stops them. Servers now keep in-memory
-  state between calls, as they do with one server or `session_affinity`.
+  swap retires it, closing them in parallel, since nothing else stops them.
+  fastmcp's stdio connect has no lock, so after a backend crash every
+  concurrent call started its own process and all but one were orphaned; a
+  per-backend lock now lets one call restart it. Servers now keep in-memory
+  state between calls, as they do with one server or `session_affinity`,
+  including the docs, slides and pdf image caches (which `read_image` needs)
+  for the whole run. Each grid run gets a fresh container, so none of it
+  carries over between runs.
 - **Mail mbox lock** (mail server). `mailbox.lock()` never waits, so overlapping
   mail calls failed: `ExternalClashError` escaped the `OSError` handler, and
   two threads of one process locking in the same second hit `FileExistsError`
   on mailbox's pre-lock file. `send_mail` (and reply/forward) and the mailbox
   reader now lock through `locked_mbox`, which serializes the process's threads
-  per mbox, then retries the file lock with backoff for up to
-  `APP_MAIL_LOCK_TIMEOUT_SEC` (default 10) before reporting the mailbox busy.
-  It removes a dot-lock older than `APP_MAIL_STALE_LOCK_SEC` (default 60), left
-  by a killed process.
+  per mbox, then retries the file lock with backoff. Both waits share one
+  deadline of `APP_MAIL_LOCK_TIMEOUT_SEC` (default 10) before the mailbox is
+  reported busy. A dot-lock older than `APP_MAIL_STALE_LOCK_SEC` (default 60) is
+  removed as left by a killed process, but only while holding the `lockf` lock,
+  so a lock that a live process holds is never removed.
 - **Environment image** (13.4 GB of layers to 5.0 GB; a warm rebuild takes
   about 2.5 min, down from 15–20).
   - The ignore file is `environment/Dockerfile.dockerignore`. BuildKit never

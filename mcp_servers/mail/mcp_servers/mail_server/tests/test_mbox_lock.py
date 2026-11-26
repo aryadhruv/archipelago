@@ -131,3 +131,59 @@ def test_stale_dot_lock_is_removed(fresh_mbox, monkeypatch):
         box.flush()
     box.close()
     assert len(mailbox.mbox(fresh_mbox)) == 1
+
+
+def _hold_file_lock(path: str, ready, seconds: float, age_dot_lock: bool) -> None:
+    box = UTF8Mbox(path)
+    box.lock()
+    if age_dot_lock:
+        old = time.time() - 600
+        os.utime(path + ".lock", (old, old))
+    ready.set()
+    time.sleep(seconds)
+    box.unlock()
+    box.close()
+
+
+def _start_holder(path: str, seconds: float, age_dot_lock: bool = False):
+    ctx = multiprocessing.get_context("spawn")
+    ready = ctx.Event()
+    proc = ctx.Process(
+        target=_hold_file_lock, args=(path, ready, seconds, age_dot_lock)
+    )
+    proc.start()
+    assert ready.wait(30)
+    return proc
+
+
+def test_wait_is_bounded_by_one_timeout(fresh_mbox, monkeypatch):
+    monkeypatch.setattr(mbox_utils, "LOCK_TIMEOUT_SEC", 0.6)
+    UTF8Mbox(fresh_mbox).close()
+    proc = _start_holder(fresh_mbox, seconds=5)
+    # Another thread holds this process's lock for 0.4 s; the file stays locked
+    # by the other process, so the caller must give up at 0.6 s, not 0.4 + 0.6.
+    thread_lock = mbox_utils._thread_lock_for(fresh_mbox)
+    thread_lock.acquire()
+    threading.Timer(0.4, thread_lock.release).start()
+    try:
+        start = time.monotonic()
+        with pytest.raises(MailboxBusy):
+            with locked_mbox(UTF8Mbox(fresh_mbox), fresh_mbox):
+                pass
+        assert time.monotonic() - start < 0.85
+    finally:
+        proc.join(10)
+
+
+def test_live_dot_lock_is_never_removed(fresh_mbox, monkeypatch):
+    monkeypatch.setattr(mbox_utils, "LOCK_TIMEOUT_SEC", 0.5)
+    monkeypatch.setattr(mbox_utils, "STALE_LOCK_SEC", 1)
+    UTF8Mbox(fresh_mbox).close()
+    proc = _start_holder(fresh_mbox, seconds=3, age_dot_lock=True)
+    try:
+        with pytest.raises(MailboxBusy):
+            with locked_mbox(UTF8Mbox(fresh_mbox), fresh_mbox):
+                pass
+        assert os.path.exists(fresh_mbox + ".lock")
+    finally:
+        proc.join(10)
