@@ -369,12 +369,11 @@ async def test_rest_only_service_routes_but_not_aggregated() -> None:
 
     captured: dict[str, Any] = {}
 
-    def _fake_as_proxy(config_dict: dict[str, Any], **_: Any) -> FastMCP[Any]:
+    def _fake_build_proxy(config_dict: dict[str, Any], *_: Any) -> FastMCP[Any]:
         captured["servers"] = set(config_dict["mcpServers"].keys())
         return FastMCP(name="Gateway")
 
-    with patch.object(gw, "FastMCP") as mock_fastmcp:
-        mock_fastmcp.as_proxy.side_effect = _fake_as_proxy
+    with patch.object(gw, "_build_proxy", _fake_build_proxy):
         _build_mcp_app_with_proxy(_serving_config_dict(config))
 
     assert captured["servers"] == {"both_svc"}

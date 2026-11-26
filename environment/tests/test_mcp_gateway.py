@@ -286,7 +286,7 @@ async def test_rest_only_server_in_readiness_but_not_aggregated(
 
     aggregated: dict[str, Any] = {}
 
-    def _fake_as_proxy(config_dict: dict[str, Any], **_: Any) -> FastMCP[Any]:
+    def _fake_build_proxy(config_dict: dict[str, Any], *_: Any) -> FastMCP[Any]:
         aggregated["servers"] = set(config_dict["mcpServers"].keys())
         return FastMCP(name="Gateway")
 
@@ -313,13 +313,9 @@ async def test_rest_only_server_in_readiness_but_not_aggregated(
     monkeypatch.setattr(gw, "get_mcp_lifespan_manager", lambda: store["lm"])
     monkeypatch.setattr(gw, "set_mcp_lifespan_manager", lambda m: store.update(lm=m))
 
-    real_as_proxy = FastMCP.as_proxy
-    monkeypatch.setattr(FastMCP, "as_proxy", staticmethod(_fake_as_proxy))
-    try:
-        app = FastAPI()
-        _ = await gw.swap_mcp_app(config, app)
-    finally:
-        monkeypatch.setattr(FastMCP, "as_proxy", staticmethod(real_as_proxy))
+    monkeypatch.setattr(gw, "_build_proxy", _fake_build_proxy)
+    app = FastAPI()
+    _ = await gw.swap_mcp_app(config, app)
 
     assert aggregated["servers"] == {"both_svc"}
     assert warm_gateway_servers == ["both_svc"]

@@ -35,15 +35,20 @@ def _alive(pid: int) -> bool:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_calls_after_crash_restart_one_backend(tmp_path: Path):
+@pytest.mark.parametrize(
+    ("names", "tool"), [(["a"], "ping"), (["a", "b"], "a_ping")], ids=["one", "two"]
+)
+async def test_concurrent_calls_after_crash_restart_one_backend(
+    tmp_path: Path, names: list[str], tool: str
+):
     script = tmp_path / "pid_server.py"
     script.write_text(SERVER)
     server = {"transport": "stdio", "command": sys.executable, "args": [str(script)]}
-    proxy = _build_proxy({"mcpServers": {"a": server, "b": server}})
+    proxy = _build_proxy({"mcpServers": {n: server for n in names}})
 
     async def ping() -> int:
         async with FastMCPClient(proxy) as client:
-            result = await client.call_tool("a_ping", {})
+            result = await client.call_tool(tool, {})
             return int(result.content[0].text)
 
     async with proxy._lifespan_manager():

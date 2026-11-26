@@ -191,8 +191,10 @@ what we removed.
   (`<server>_<tool>`). A lifespan on the gateway closes the backends when a
   swap retires it, closing them in parallel, since nothing else stops them.
   fastmcp's stdio connect has no lock, so after a backend crash every
-  concurrent call started its own process and all but one were orphaned; a
-  per-backend lock now lets one call restart it. Servers now keep in-memory
+  concurrent call started its own process and all but one were orphaned. A
+  per-backend lock now lets one call restart it, close waits for a restart in
+  progress, and a closed backend refuses to start again. A single server goes
+  through the same per-backend client, lock and close. Servers now keep in-memory
   state between calls, as they do with one server or `session_affinity`,
   including the docs, slides and pdf image caches (which `read_image` needs)
   for the whole run. Each grid run gets a fresh container, so none of it
@@ -206,7 +208,7 @@ what we removed.
   deadline of `APP_MAIL_LOCK_TIMEOUT_SEC` (default 10) before the mailbox is
   reported busy. A dot-lock older than `APP_MAIL_STALE_LOCK_SEC` (default 60) is
   removed as left by a killed process, but only while holding the `lockf` lock,
-  so a lock that a live process holds is never removed.
+  which a live holder keeps for as long as it holds the dot-lock.
 - **Environment image** (13.4 GB of layers to 5.0 GB; a warm rebuild takes
   about 2.5 min, down from 15–20).
   - The ignore file is `environment/Dockerfile.dockerignore`. BuildKit never

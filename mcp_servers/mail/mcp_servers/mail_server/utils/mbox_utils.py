@@ -90,12 +90,17 @@ def locked_mbox(box: mailbox.mbox, path: str) -> Iterator[mailbox.mbox]:
                     raise MailboxBusy(path) from e
                 if str(e).startswith("dot lock unavailable"):
                     _remove_stale_dot_lock(box, path)
-                time.sleep(delay)
+                time.sleep(min(delay, max(0.0, deadline - time.monotonic())))
                 delay = min(delay * 2, 0.2)
         try:
             yield box
         finally:
-            box.unlock()
+            try:
+                box.unlock()
+            except FileNotFoundError:
+                # A waiter took lockf between mailbox's lockf release and its
+                # dot-lock removal and cleared our dot-lock as stale.
+                pass
     finally:
         thread_lock.release()
 
