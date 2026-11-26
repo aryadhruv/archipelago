@@ -97,6 +97,10 @@ First round done (see `fork-changes.md`). Still open:
 
 ### Gateway and server runtime
 
+- **The judge can't see sent mail.** The snapshot diff lists
+  `.apps_data/mail/sent.mbox` as created but shows none of its content, so a
+  rubric line about the body or recipients fails even when the mail is right.
+  Extract new mbox messages (headers and body) into the diff the judge sees.
 - **`POST /apps` mid-run kills live sessions.** The call in flight hangs
   until its 120 s timeout instead of failing with a clear error.
 - **Path checks order** (`mcp_actor/paths.py`, `_dealias_root_prefix` in the
