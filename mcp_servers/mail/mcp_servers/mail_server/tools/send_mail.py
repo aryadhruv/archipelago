@@ -7,7 +7,7 @@ from email.utils import formatdate, make_msgid
 from models.mail import MailResponse, SendMailInput
 from utils.config import MAX_SUBJECT_LENGTH
 from utils.decorators import make_async_background
-from utils.mbox_utils import MailboxBusy, UTF8Mbox, locked_mbox
+from utils.mbox_utils import MailboxBusy, locked_mbox
 from utils.path import get_mbox_path
 from utils.structured import structured
 
@@ -179,22 +179,18 @@ def send_mail(input: SendMailInput) -> str:
     mbox_path = get_mbox_path()
     os.makedirs(os.path.dirname(mbox_path), exist_ok=True)
     try:
-        mbox = UTF8Mbox(mbox_path)
-        try:
-            with locked_mbox(mbox, mbox_path):
-                mbox.add(msg)
-                mbox.flush()
-        except MailboxBusy as lock_error:
-            response = MailResponse(
-                success=False,
-                mail_id=None,
-                recipients_count=None,
-                message="Mailbox is currently busy. Please try again in a moment.",
-                error=repr(lock_error),
-            )
-            return structured(response)
-        finally:
-            mbox.close()
+        with locked_mbox(mbox_path) as mbox:
+            mbox.add(msg)
+            mbox.flush()
+    except MailboxBusy as lock_error:
+        response = MailResponse(
+            success=False,
+            mail_id=None,
+            recipients_count=None,
+            message="Mailbox is currently busy. Please try again in a moment.",
+            error=repr(lock_error),
+        )
+        return structured(response)
     except Exception as exc:
         response = MailResponse(
             success=False,

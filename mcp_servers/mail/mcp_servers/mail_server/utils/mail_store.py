@@ -19,7 +19,6 @@ from email.message import Message
 
 from utils.mbox_utils import (
     MailboxBusy,
-    UTF8Mbox,
     locked_mbox,
     message_identity,
     safe_get_header,
@@ -151,17 +150,14 @@ def _collect(load: MailboxLoad, message: Message, source: str, index: int) -> No
 
 def _load_mbox(load: MailboxLoad, path: str) -> None:
     source = _relative(path)
-    box = UTF8Mbox(path)
     try:
-        with locked_mbox(box, path):
+        with locked_mbox(path) as box:
             for index, message in enumerate(box):
                 _collect(load, message, source, index)
     except MailboxBusy:
         load.errors.append(
             f"Mailbox '{source}' is currently busy. Please try again in a moment."
         )
-    finally:
-        box.close()
 
 
 def _parse_eml(raw: bytes) -> Message | None:
