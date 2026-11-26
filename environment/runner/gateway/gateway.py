@@ -10,7 +10,7 @@ import json
 import os
 import re
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, override
 
@@ -1432,39 +1432,46 @@ def _gateway_middleware(
     ]
 
 
-def _serialize_stdio_connect(client: ProxyClient) -> None:
+def _serialize_stdio_connect(client: ProxyClient) -> Callable[[], Awaitable[None]]:
     """Let one call at a time (re)start or close a backend's stdio process.
 
     fastmcp's StdioTransport.connect has no lock: after a backend dies, each
     concurrent call starts its own process and all but the last are orphaned.
-    close() takes the same lock so it can't run in the middle of a restart, and
-    a closed backend refuses to start again for calls still on the old gateway.
+    close() takes the same lock so it can't run in the middle of a restart.
+    Returns the gateway's retire step: close, then refuse restarts from calls
+    still on the old gateway. A plain close() (fastmcp calls it when a call is
+    cancelled mid-connect) leaves the backend free to restart.
     """
     transport = getattr(client.transport, "transport", None)
     if not isinstance(transport, StdioTransport):
-        return
+        return client.transport.close
     connect, close = transport.connect, transport.close
     lock = asyncio.Lock()
-    closed = False
+    retired = False
 
     async def locked_connect(**session_kwargs: Any) -> Any:
         async with lock:
-            if closed:
+            if retired:
                 raise RuntimeError("MCP backend closed: the gateway was replaced")
             return await connect(**session_kwargs)
 
     async def locked_close() -> None:
-        nonlocal closed
         async with lock:
-            closed = True
+            await close()
+
+    async def retire() -> None:
+        nonlocal retired
+        async with lock:
+            retired = True
             await close()
 
     transport.connect = locked_connect  # pyright: ignore[reportAttributeAccessIssue]
     transport.close = locked_close  # pyright: ignore[reportAttributeAccessIssue]
+    return retire
 
 
-def _closing_lifespan(clients: list[ProxyClient]) -> Any:
-    """Close the kept-alive backends when a swap retires the gateway."""
+def _closing_lifespan(retires: list[Callable[[], Awaitable[None]]]) -> Any:
+    """Retire the kept-alive backends when a swap retires the gateway."""
 
     @contextlib.asynccontextmanager
     async def lifespan(_server: FastMCP) -> Any:
@@ -1472,8 +1479,7 @@ def _closing_lifespan(clients: list[ProxyClient]) -> Any:
             yield {}
         finally:
             _ = await asyncio.gather(
-                *(client.transport.close() for client in clients),
-                return_exceptions=True,
+                *(retire() for retire in retires), return_exceptions=True
             )
 
     return lifespan
@@ -1501,12 +1507,9 @@ def _build_proxy(
             name: ProxyClient({"mcpServers": {name: cfg}}, timeout=timeout)
             for name, cfg in servers.items()
         }
-        for client in clients.values():
-            _serialize_stdio_connect(client)
+        retires = [_serialize_stdio_connect(client) for client in clients.values()]
         composite = FastMCP(
-            name="Gateway",
-            middleware=middleware,
-            lifespan=_closing_lifespan(list(clients.values())),
+            name="Gateway", middleware=middleware, lifespan=_closing_lifespan(retires)
         )
         for name, client in clients.items():
             composite.mount(create_proxy(client, name=f"Proxy-{name}"), namespace=name)
@@ -1514,12 +1517,12 @@ def _build_proxy(
 
     # Same construction as FastMCP.as_proxy(config_dict), with the lock and close.
     client = ProxyClient(config_dict, timeout=timeout)
-    _serialize_stdio_connect(client)
+    retire = _serialize_stdio_connect(client)
     return FastMCPProxy(
         client_factory=client.new,
         name="Gateway",
         middleware=middleware,
-        lifespan=_closing_lifespan([client]),
+        lifespan=_closing_lifespan([retire]),
     )
 
 
@@ -1849,11 +1852,19 @@ async def _build_multi_stateful_mcp_app_with_proxy(
     handle = StatefulProxyHandle(stop, task)
 
     try:
+        plain = {
+            name: ProxyClient({"mcpServers": {name: server_cfg}}, timeout=timeout)
+            for name, server_cfg in config_dict["mcpServers"].items()
+            if name not in clients
+        }
         composite = FastMCP(
             name="Gateway",
             middleware=_gateway_middleware(alias_middleware, disable_middleware),
+            lifespan=_closing_lifespan(
+                [_serialize_stdio_connect(c) for c in plain.values()]
+            ),
         )
-        for name, server_cfg in config_dict["mcpServers"].items():
+        for name in config_dict["mcpServers"]:
             if name in clients:
                 # create_proxy() over a *connected* client reuses its session per
                 # request; mount with namespace=<name> to match fastmcp's native
@@ -1863,10 +1874,7 @@ async def _build_multi_stateful_mcp_app_with_proxy(
                 # Non-affine backend: a *disconnected* ProxyClient makes
                 # create_proxy() open a fresh session per request, so the per-call
                 # Authorization rewrite is forwarded (pre-affinity behavior).
-                proxy = create_proxy(
-                    ProxyClient({"mcpServers": {name: server_cfg}}, timeout=timeout),
-                    name=f"Proxy-{name}",
-                )
+                proxy = create_proxy(plain[name], name=f"Proxy-{name}")
             composite.mount(proxy, namespace=name)
         mcp_app = composite.http_app(path="/")
     except BaseException:

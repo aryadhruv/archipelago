@@ -70,13 +70,9 @@ async def test_concurrent_sends_and_lists_all_succeed(fresh_mbox):
 
 def _append_in_process(path: str, start: int, count: int) -> None:
     for i in range(start, start + count):
-        box = UTF8Mbox(path)
-        try:
-            with locked_mbox(box, path):
-                box.add(_message(i))
-                box.flush()
-        finally:
-            box.close()
+        with locked_mbox(path) as box:
+            box.add(_message(i))
+            box.flush()
 
 
 def test_two_processes_append_without_loss(fresh_mbox):
@@ -100,18 +96,16 @@ def test_lock_times_out_as_busy(fresh_mbox, monkeypatch):
     release = threading.Event()
 
     def holder() -> None:
-        box = UTF8Mbox(fresh_mbox)
-        with locked_mbox(box, fresh_mbox):
+        with locked_mbox(fresh_mbox):
             held.set()
             release.wait(5)
-        box.close()
 
     t = threading.Thread(target=holder)
     t.start()
     held.wait(5)
     start = time.monotonic()
     with pytest.raises(MailboxBusy):
-        with locked_mbox(UTF8Mbox(fresh_mbox), fresh_mbox):
+        with locked_mbox(fresh_mbox):
             pass
     assert time.monotonic() - start >= 0.3
     release.set()
@@ -125,11 +119,9 @@ def test_stale_dot_lock_is_removed(fresh_mbox, monkeypatch):
     open(dot_lock, "w").close()
     old = time.time() - 5
     os.utime(dot_lock, (old, old))
-    box = UTF8Mbox(fresh_mbox)
-    with locked_mbox(box, fresh_mbox):
+    with locked_mbox(fresh_mbox) as box:
         box.add(_message(0))
         box.flush()
-    box.close()
     assert len(mailbox.mbox(fresh_mbox)) == 1
 
 
@@ -168,7 +160,7 @@ def test_wait_is_bounded_by_one_timeout(fresh_mbox, monkeypatch):
     try:
         start = time.monotonic()
         with pytest.raises(MailboxBusy):
-            with locked_mbox(UTF8Mbox(fresh_mbox), fresh_mbox):
+            with locked_mbox(fresh_mbox):
                 pass
         assert time.monotonic() - start < 0.85
     finally:
@@ -182,8 +174,49 @@ def test_live_dot_lock_is_never_removed(fresh_mbox, monkeypatch):
     proc = _start_holder(fresh_mbox, seconds=3, age_dot_lock=True)
     try:
         with pytest.raises(MailboxBusy):
-            with locked_mbox(UTF8Mbox(fresh_mbox), fresh_mbox):
+            with locked_mbox(fresh_mbox):
                 pass
         assert os.path.exists(fresh_mbox + ".lock")
     finally:
         proc.join(10)
+
+
+def _try_lockf(path: str, result) -> None:
+    import fcntl
+
+    with open(path, "rb+") as f:
+        try:
+            fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result.value = 1
+        except OSError:
+            result.value = 0
+
+
+def test_busy_caller_keeps_holders_lockf(fresh_mbox, monkeypatch):
+    monkeypatch.setattr(mbox_utils, "LOCK_TIMEOUT_SEC", 0.2)
+    held = threading.Event()
+    release = threading.Event()
+
+    def holder() -> None:
+        with locked_mbox(fresh_mbox):
+            held.set()
+            release.wait(10)
+
+    t = threading.Thread(target=holder)
+    t.start()
+    assert held.wait(5)
+    try:
+        # A caller that gives up must not open and close the file: closing any
+        # descriptor would drop the holder's lockf for the whole process.
+        with pytest.raises(MailboxBusy):
+            with locked_mbox(fresh_mbox):
+                pass
+        ctx = multiprocessing.get_context("spawn")
+        result = ctx.Value("i", -1)
+        proc = ctx.Process(target=_try_lockf, args=(fresh_mbox, result))
+        proc.start()
+        proc.join(30)
+        assert result.value == 0
+    finally:
+        release.set()
+        t.join()

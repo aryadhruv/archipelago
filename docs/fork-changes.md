@@ -193,7 +193,9 @@ what we removed.
   fastmcp's stdio connect has no lock, so after a backend crash every
   concurrent call started its own process and all but one were orphaned. A
   per-backend lock now lets one call restart it, close waits for a restart in
-  progress, and a closed backend refuses to start again. A single server goes
+  progress, and a backend retired with its gateway refuses to start again (a
+  call cancelled mid-connect only closes it, so the next call restarts it). A
+  single server, and the non-affine servers of the `session_affinity` path, go
   through the same per-backend client, lock and close. Servers now keep in-memory
   state between calls, as they do with one server or `session_affinity`,
   including the docs, slides and pdf image caches (which `read_image` needs)
@@ -208,7 +210,9 @@ what we removed.
   deadline of `APP_MAIL_LOCK_TIMEOUT_SEC` (default 10) before the mailbox is
   reported busy. A dot-lock older than `APP_MAIL_STALE_LOCK_SEC` (default 60) is
   removed as left by a killed process, but only while holding the `lockf` lock,
-  which a live holder keeps for as long as it holds the dot-lock.
+  which a live holder keeps for as long as it holds the dot-lock. `locked_mbox`
+  opens and closes the mbox itself under the thread lock, because closing any
+  descriptor for the file would drop the process's `lockf`.
 - **Environment image** (13.4 GB of layers to 5.0 GB; a warm rebuild takes
   about 2.5 min, down from 15–20).
   - The ignore file is `environment/Dockerfile.dockerignore`. BuildKit never

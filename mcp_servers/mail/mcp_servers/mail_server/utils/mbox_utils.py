@@ -73,34 +73,46 @@ def _remove_stale_dot_lock(box: mailbox.mbox, path: str) -> None:
 
 
 @contextmanager
-def locked_mbox(box: mailbox.mbox, path: str) -> Iterator[mailbox.mbox]:
-    """Lock an mbox, waiting up to LOCK_TIMEOUT_SEC in all (threads, then processes)."""
+def locked_mbox(path: str) -> Iterator["UTF8Mbox"]:
+    """Open and lock an mbox, waiting up to LOCK_TIMEOUT_SEC in all (threads, then processes).
+
+    The box is opened and closed under this process's lock for the path:
+    closing any descriptor for the file drops the process's lockf on it.
+    """
     deadline = time.monotonic() + LOCK_TIMEOUT_SEC
     thread_lock = _thread_lock_for(path)
     if not thread_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
         raise MailboxBusy(path)
     try:
-        delay = 0.01
-        while True:
-            try:
-                box.lock()
-                break
-            except (mailbox.ExternalClashError, BlockingIOError, FileExistsError) as e:
-                if time.monotonic() >= deadline:
-                    raise MailboxBusy(path) from e
-                if str(e).startswith("dot lock unavailable"):
-                    _remove_stale_dot_lock(box, path)
-                time.sleep(min(delay, max(0.0, deadline - time.monotonic())))
-                delay = min(delay * 2, 0.2)
+        box = UTF8Mbox(path)
         try:
-            yield box
-        finally:
+            delay = 0.01
+            while True:
+                try:
+                    box.lock()
+                    break
+                except (
+                    mailbox.ExternalClashError,
+                    BlockingIOError,
+                    FileExistsError,
+                ) as e:
+                    if time.monotonic() >= deadline:
+                        raise MailboxBusy(path) from e
+                    if str(e).startswith("dot lock unavailable"):
+                        _remove_stale_dot_lock(box, path)
+                    time.sleep(min(delay, max(0.0, deadline - time.monotonic())))
+                    delay = min(delay * 2, 0.2)
             try:
-                box.unlock()
-            except FileNotFoundError:
-                # A waiter took lockf between mailbox's lockf release and its
-                # dot-lock removal and cleared our dot-lock as stale.
-                pass
+                yield box
+            finally:
+                try:
+                    box.unlock()
+                except FileNotFoundError:
+                    # A waiter took lockf between mailbox's lockf release and
+                    # its dot-lock removal and cleared our dot-lock as stale.
+                    pass
+        finally:
+            box.close()
     finally:
         thread_lock.release()
 

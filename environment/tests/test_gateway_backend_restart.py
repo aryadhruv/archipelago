@@ -65,3 +65,41 @@ async def test_concurrent_calls_after_crash_restart_one_backend(
     while _alive(restarted) and time.monotonic() < deadline:
         await asyncio.sleep(0.1)
     assert not _alive(restarted)
+
+
+SLOW_SERVER = """
+import time
+time.sleep(1)
+from fastmcp import FastMCP
+m = FastMCP("slow")
+@m.tool
+def echo(x: str) -> str:
+    return x
+if __name__ == "__main__":
+    m.run()
+"""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("names", "tool"), [(["a"], "echo"), (["a", "b"], "a_echo")], ids=["one", "two"]
+)
+async def test_call_cancelled_mid_connect_leaves_backend_usable(
+    tmp_path: Path, names: list[str], tool: str
+):
+    script = tmp_path / "slow_server.py"
+    script.write_text(SLOW_SERVER)
+    server = {"transport": "stdio", "command": sys.executable, "args": [str(script)]}
+    proxy = _build_proxy({"mcpServers": {n: server for n in names}})
+
+    async def echo() -> str:
+        async with FastMCPClient(proxy) as client:
+            return (await client.call_tool(tool, {"x": "hi"})).content[0].text
+
+    async with proxy._lifespan_manager():
+        first = asyncio.create_task(echo())
+        await asyncio.sleep(0.3)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        assert await asyncio.wait_for(echo(), 30) == "hi"
