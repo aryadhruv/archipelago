@@ -65,9 +65,10 @@ if os.getenv("USE_INDIVIDUAL_TOOLS", "").lower() in ("true", "1", "yes"):
         mcp.tool(structured_tool(tool_fn), output_schema=output_schema(response_model))
 else:
     # Register meta-tools (2 tools instead of 7)
-    from tools._meta_tools import mail, mail_schema
+    from tools._meta_tools import MailOutput, mail, mail_schema
+    from utils.structured import model_tool, output_schema
 
-    mcp.tool(mail)
+    mcp.tool(model_tool(mail), output_schema=output_schema(MailOutput))
     mcp.tool(mail_schema)
 
 
