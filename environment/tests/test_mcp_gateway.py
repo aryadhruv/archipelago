@@ -362,7 +362,7 @@ async def test_allow_zero_tools_server_probed_directly_but_still_aggregated(
 
     aggregated: dict[str, Any] = {}
 
-    def _fake_as_proxy(config_dict: dict[str, Any], **_: Any) -> FastMCP[Any]:
+    def _fake_build_proxy(config_dict: dict[str, Any], *_: Any) -> FastMCP[Any]:
         aggregated["servers"] = set(config_dict["mcpServers"].keys())
         aggregated["keys"] = {
             n: set(s.keys()) for n, s in config_dict["mcpServers"].items()
@@ -404,13 +404,9 @@ async def test_allow_zero_tools_server_probed_directly_but_still_aggregated(
     monkeypatch.setattr(gw, "get_mcp_lifespan_manager", lambda: store["lm"])
     monkeypatch.setattr(gw, "set_mcp_lifespan_manager", lambda m: store.update(lm=m))
 
-    real_as_proxy = FastMCP.as_proxy
-    monkeypatch.setattr(FastMCP, "as_proxy", staticmethod(_fake_as_proxy))
-    try:
-        app = FastAPI()
-        _ = await gw.swap_mcp_app(config, app)
-    finally:
-        monkeypatch.setattr(FastMCP, "as_proxy", staticmethod(real_as_proxy))
+    monkeypatch.setattr(gw, "_build_proxy", _fake_build_proxy)
+    app = FastAPI()
+    _ = await gw.swap_mcp_app(config, app)
 
     # Still aggregated: the flag changes how readiness VERIFIES the server,
     # not whether it serves.

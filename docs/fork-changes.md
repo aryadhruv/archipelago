@@ -175,6 +175,15 @@ what we removed.
 
 ## Fixed
 
+- **MCP servers restarted on every call** (gateway). With two or more servers,
+  fastmcp's multi-server transport stopped and restarted every backend on each
+  new client session, and the gateway opens one per request, so each tool call
+  started all servers again (about 4.4 s with the 9 default servers). The
+  gateway now mounts one single-server proxy per backend, which keeps each stdio
+  process running (about 0.01 s per call). Tool names are unchanged
+  (`<server>_<tool>`). A lifespan on the gateway closes the backends when a
+  swap retires it, since nothing else stops them. Servers now keep in-memory
+  state between calls, as they do with one server or `session_affinity`.
 - **Mail mbox lock** (mail server). `mailbox.lock()` never waits, so overlapping
   mail calls failed: `ExternalClashError` escaped the `OSError` handler, and
   two threads of one process locking in the same second hit `FileExistsError`
