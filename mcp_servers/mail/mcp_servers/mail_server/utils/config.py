@@ -32,3 +32,14 @@ DEFAULT_LIST_LIMIT = int(os.getenv("APP_MAIL_LIST_DEFAULT_LIMIT", "50"))
 
 # Maximum number of emails that can be returned in a single list request
 MAX_LIST_LIMIT = int(os.getenv("APP_MAIL_LIST_MAX_LIMIT", "100"))
+
+
+# ============================================================================
+# Mailbox Locking
+# ============================================================================
+
+# How long a call waits for the mbox lock before reporting the mailbox busy
+LOCK_TIMEOUT_SEC = float(os.getenv("APP_MAIL_LOCK_TIMEOUT_SEC", "10"))
+
+# A dot-lock older than this is taken to be left by a killed process and removed
+STALE_LOCK_SEC = float(os.getenv("APP_MAIL_STALE_LOCK_SEC", "60"))

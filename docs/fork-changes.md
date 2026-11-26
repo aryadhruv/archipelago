@@ -175,6 +175,15 @@ what we removed.
 
 ## Fixed
 
+- **Mail mbox lock** (mail server). `mailbox.lock()` never waits, so overlapping
+  mail calls failed: `ExternalClashError` escaped the `OSError` handler, and
+  two threads of one process locking in the same second hit `FileExistsError`
+  on mailbox's pre-lock file. `send_mail` (and reply/forward) and the mailbox
+  reader now lock through `locked_mbox`, which serializes the process's threads
+  per mbox, then retries the file lock with backoff for up to
+  `APP_MAIL_LOCK_TIMEOUT_SEC` (default 10) before reporting the mailbox busy.
+  It removes a dot-lock older than `APP_MAIL_STALE_LOCK_SEC` (default 60), left
+  by a killed process.
 - **Environment image** (13.4 GB of layers to 5.0 GB; a warm rebuild takes
   about 2.5 min, down from 15–20).
   - The ignore file is `environment/Dockerfile.dockerignore`. BuildKit never
